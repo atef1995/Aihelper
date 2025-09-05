@@ -1,0 +1,19 @@
+{
+  "name": "aihelper",
+  "version": "1.0.0",
+  "description": "an app",
+  "license": "MIT",
+  "author": "atefcodes",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0"
+  },
+  "dependencies": {
+    "openai": "^5.19.1"
+  }
+}
