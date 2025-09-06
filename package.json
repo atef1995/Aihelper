@@ -21,7 +21,8 @@
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
     "dist": "npm run build",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "publish": "electron-builder --win -p always"
   },
   "build": {
     "appId": "com.atef1995.aihelper",
@@ -113,12 +114,18 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "publish": null
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "atef1995",
+        "repo": "aihelper"
+      }
+    ]
   },
   "devDependencies": {
     "@electron-forge/publisher-github": "^7.8.3",
     "electron": "^38.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.13.3"
   },
   "dependencies": {
     "fluent-ffmpeg": "^2.1.2",
