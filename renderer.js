@@ -1,8 +1,4 @@
-// renderer.js
-const startButton = document.getElementById('startButton');
-const stopButton = document.getElementById('stopButton');
-const downloadButton = document.getElementById('downloadButton');
-const downloadLink = document.getElementById('downloadLink');
+// renderer.js - Clean version
 const streamButton = document.getElementById('streamButton');
 const stopStreamButton = document.getElementById('stopStreamButton');
 const openaiResponse = document.getElementById('openaiResponse');
@@ -10,71 +6,24 @@ const streamingStatus = document.getElementById('streamingStatus');
 const apiKeyInput = document.getElementById('apiKeyInput');
 const setApiKeyButton = document.getElementById('setApiKeyButton');
 const apiKeyStatus = document.getElementById('apiKeyStatus');
-const audio = document.querySelector('audio');
-const logElement = document.getElementById('info');
+// Remove logElement since there's no 'info' element in HTML
 
-let recordingTimeMS = 5000;
-let recordedBlob = null;
+// Context management elements
+const contextInput = document.getElementById('contextInput');
+const saveContextButton = document.getElementById('saveContextButton');
+const clearContextButton = document.getElementById('clearContextButton');
+const fileInput = document.getElementById('fileInput');
+const fileDropZone = document.getElementById('fileDropZone');
+const uploadedFiles = document.getElementById('uploadedFiles');
+const contextStatus = document.getElementById('contextStatus');
+
+const helpBtn = document.getElementById('helpBtn');
+const gotItBtn = document.getElementById('gotItBtn');
+const closeGuideBtn = document.getElementById('closeGuideBtn');
+
 let isStreaming = false;
-let mediaRecorder = null;
-let audioChunks = [];
-let streamingInterval = null;
-let audioContext = null;
-let analyser = null;
-let audioLevelThreshold = 5; // Minimum audio level to process (0-100)
-let speechStartTime = null; // When speech started
-let speechEndTime = null; // When speech ended
-let silenceDuration = 2000; // Wait 2 seconds of silence before processing
-let minSpeechDuration = 1000; // Minimum speech duration (1 second)
-let isSpeaking = false;
 
-
-startButton.addEventListener('click', () => {
-  navigator.mediaDevices.getDisplayMedia({
-    audio: true,
-    video: true
-  }).then(stream => {
-    audio.srcObject = stream
-    const audioTracks = stream.getAudioTracks();
-    if (audioTracks.length === 0) {
-      throw new Error('No audio tracks available in stream');
-    }
-    const audioStream = new MediaStream(audioTracks);
-    return startRecording(audioStream, recordingTimeMS);
-  }).then((recordedChunks) => {
-    recordedBlob = new Blob(recordedChunks, { type: "audio/wav" });
-    const recordedUrl = URL.createObjectURL(recordedBlob);
-    downloadLink.href = recordedUrl;
-    downloadLink.download = "RecordedAudio.wav";
-
-    log(
-      `Successfully recorded ${Math.trunc(recordedBlob.size / 1000000)} MB of ${recordedBlob.type} media.`,
-    );
-    downloadButton.removeAttribute('disabled');
-    startButton.disabled = false;
-    stopButton.disabled = true;
-  }).catch(error => {
-    if (error.name === "NotFoundError") {
-      log("Camera or microphone not found. Can't record.");
-    } else {
-      log(error);
-    }
-    startButton.disabled = false;
-    stopButton.disabled = true;
-  })
-
-  startButton.disabled = true;
-  stopButton.disabled = false;
-})
-
-stopButton.addEventListener('click', () => {
-  audio.pause()
-  if (audio.srcObject) {
-    stop(audio.srcObject);
-    audio.srcObject = null;
-  }
-})
-
+// Event Listeners
 streamButton.addEventListener('click', () => {
   startRealTimeStream();
 });
@@ -130,29 +79,7 @@ function updateStreamButtonState() {
   });
 }
 
-function startRecording(stream, lengthInMS) {
-  let recorder = new MediaRecorder(stream);
-  let data = [];
-
-  recorder.ondataavailable = (event) => data.push(event.data);
-  recorder.start();
-  log(`${recorder.state} for ${lengthInMS / 1000} seconds…`);
-
-  let stopped = new Promise((resolve, reject) => {
-    recorder.onstop = resolve;
-    recorder.onerror = (event) => reject(event.name);
-  });
-
-  let recorded = wait(lengthInMS).then(() => {
-    if (recorder.state === "recording") {
-      recorder.stop();
-    }
-  });
-
-  return Promise.all([stopped, recorded]).then(() => data);
-}
-
-// Real-time streaming functions
+// SIMPLE Push-to-Record streaming function
 async function startRealTimeStream() {
   try {
     // Only use system audio (screen capture)
@@ -175,108 +102,136 @@ async function startRealTimeStream() {
 
     const audioStream = new MediaStream(audioTracks);
 
-    // Set up audio analysis for silence detection
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const source = audioContext.createMediaStreamSource(audioStream);
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.8;
-    source.connect(analyser);
-
     isStreaming = true;
     streamButton.disabled = true;
     stopStreamButton.disabled = false;
 
-    streamingStatus.textContent = '🔴 Initializing system audio...';
-    streamingStatus.className = 'status info';
+    streamingStatus.textContent = '🎤 READY - Press SPACEBAR to record and transcribe!';
+    streamingStatus.className = 'status success';
 
-    // Create MediaRecorder for real-time processing with MP3 format if supported
-    let options = { audioBitsPerSecond: 128000 };
+    // Simple approach: Record when spacebar is pressed
+    let currentRecorder = null;
+    let isRecording = false;
 
-    // Try MP3 first as it's most compatible with OpenAI
-    if (MediaRecorder.isTypeSupported('audio/mpeg')) {
-      options.mimeType = 'audio/mpeg';
-    } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-      options.mimeType = 'audio/mp4';
-    } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-      options.mimeType = 'audio/webm;codecs=opus';
-    } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-      options.mimeType = 'audio/webm';
-    }
+    const startRecording = () => {
+      if (isRecording || !isStreaming) return;
 
-    log(`Using audio format: ${options.mimeType || 'default'}`);
-    mediaRecorder = new MediaRecorder(audioStream, options);
+      isRecording = true;
+      log('Starting recording...');
+      streamingStatus.textContent = '🔴 RECORDING - Release SPACEBAR to transcribe...';
+      streamingStatus.className = 'status error';
 
-    audioChunks = [];
+      // Use simple WAV format - most reliable
+      let options = {};
+      if (MediaRecorder.isTypeSupported('audio/wav')) {
+        options.mimeType = 'audio/wav';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        options.mimeType = 'audio/webm';
+      }
 
-    mediaRecorder.ondataavailable = async (event) => {
-      if (event.data.size > 0 && isStreaming) {
-        audioChunks.push(event.data);
+      currentRecorder = new MediaRecorder(audioStream, options);
+      let recordedChunks = [];
 
-        // Check audio level and implement voice activity detection
-        const audioLevel = getAudioLevel();
-        const currentTime = Date.now();
-        
-        // Voice Activity Detection Logic
-        if (audioLevel > audioLevelThreshold) {
-          if (!isSpeaking) {
-            // Speech just started
-            isSpeaking = true;
-            speechStartTime = currentTime;
-            speechEndTime = null;
-            log(`Speech started - level: ${audioLevel}%`);
-          }
-          // Update status during speech
-          streamingStatus.textContent = `🔴 Speech detected (${audioLevel}%) - Recording...`;
-          streamingStatus.className = 'status success';
-        } else {
-          if (isSpeaking) {
-            // We were speaking, now silence - mark potential end
-            if (!speechEndTime) {
-              speechEndTime = currentTime;
-              log(`Speech might have ended - waiting for ${silenceDuration}ms silence`);
-            } else {
-              // Check if we've been silent long enough
-              const silenceTime = currentTime - speechEndTime;
-              if (silenceTime >= silenceDuration) {
-                // Speech has definitely ended
-                const speechDuration = speechEndTime - speechStartTime;
-                
-                if (speechDuration >= minSpeechDuration && audioChunks.length > 0) {
-                  // We have a valid speech segment, process it
-                  streamingStatus.textContent = '🔴 Processing speech with OpenAI...';
-                  streamingStatus.className = 'status info';
-                  log(`Processing speech segment (${speechDuration}ms duration, ${audioChunks.length} chunks)`);
-                  await processAudioChunks();
-                } else {
-                  log(`Speech too short (${speechDuration}ms) or no audio chunks, discarding`);
-                  audioChunks = []; // Clear short speech segments
+      currentRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
+      };
+
+      currentRecorder.onstop = async () => {
+        if (recordedChunks.length > 0) {
+          streamingStatus.textContent = '🔄 Processing with OpenAI...';
+          streamingStatus.className = 'status info';
+
+          const audioBlob = new Blob(recordedChunks, { type: options.mimeType || 'audio/wav' });
+          log(`Recorded ${audioBlob.size} bytes`);
+
+          try {
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+
+            const transcriptionResult = await window.electronAPI.transcribeAudio(uint8Array, options.mimeType);
+
+            if (transcriptionResult.success && transcriptionResult.text.trim()) {
+              log(`Transcribed: "${transcriptionResult.text}"`);
+
+              const chatResult = await window.electronAPI.chatCompletion(transcriptionResult.text);
+
+              if (chatResult.success) {
+                if (openaiResponse.innerHTML.includes('Start streaming to begin')) {
+                  openaiResponse.innerHTML = '';
                 }
-                
-                // Reset speech detection
-                isSpeaking = false;
-                speechStartTime = null;
-                speechEndTime = null;
+
+                openaiResponse.innerHTML += `
+                  <div class="conversation-item user">
+                    <div class="conversation-label">👤 System Audio</div>
+                    ${transcriptionResult.text}
+                  </div>
+                  <div class="conversation-item ai">
+                    <div class="conversation-label">🤖 AI Assistant</div>
+                    ${chatResult.response}
+                  </div>
+                `;
+                openaiResponse.scrollTop = openaiResponse.scrollHeight;
+
+                streamingStatus.textContent = '🎤 READY - Press SPACEBAR to record again!';
+                streamingStatus.className = 'status success';
+              } else {
+                log('Chat error: ' + chatResult.error);
+                streamingStatus.textContent = '❌ Chat error - Press SPACEBAR to try again';
+                streamingStatus.className = 'status warning';
               }
+            } else {
+              log('Transcription failed: ' + (transcriptionResult.error || 'No text'));
+              streamingStatus.textContent = '❌ Transcription failed - Press SPACEBAR to try again';
+              streamingStatus.className = 'status warning';
             }
-          }
-          
-          // Update status during silence
-          if (!isSpeaking) {
-            streamingStatus.textContent = `🔴 Listening... (${audioLevel}%)`;
-            streamingStatus.className = 'status info';
-          } else {
-            const silenceTime = speechEndTime ? (currentTime - speechEndTime) : 0;
-            const remaining = Math.max(0, silenceDuration - silenceTime);
-            streamingStatus.textContent = `🔴 Speech paused... waiting ${Math.ceil(remaining/1000)}s`;
-            streamingStatus.className = 'status warning';
+          } catch (error) {
+            log('Processing error: ' + error.message);
+            streamingStatus.textContent = '❌ Error - Press SPACEBAR to try again';
+            streamingStatus.className = 'status error';
           }
         }
+        isRecording = false;
+      };
+
+      currentRecorder.start();
+    };
+
+    const stopRecording = () => {
+      if (!isRecording || !currentRecorder) return;
+
+      log('Stopping recording...');
+      streamingStatus.textContent = '🔄 Stopping recording...';
+      streamingStatus.className = 'status info';
+      currentRecorder.stop();
+    };
+
+    // Keyboard event listeners
+    const keydownHandler = (event) => {
+      if (event.code === 'Space' && !event.repeat && isStreaming) {
+        event.preventDefault();
+        startRecording();
       }
     };
 
-    mediaRecorder.start(500); // Record in 500ms chunks for real-time processing
-    log('Real-time streaming started');
+    const keyupHandler = (event) => {
+      if (event.code === 'Space' && isStreaming) {
+        event.preventDefault();
+        stopRecording();
+      }
+    };
+
+    document.addEventListener('keydown', keydownHandler);
+    document.addEventListener('keyup', keyupHandler);
+
+    // Store cleanup function
+    window.cleanupKeyboardListeners = () => {
+      document.removeEventListener('keydown', keydownHandler);
+      document.removeEventListener('keyup', keyupHandler);
+    };
+
+    log('Simple push-to-record streaming ready!');
 
   } catch (error) {
     log('Error starting stream: ' + error.message);
@@ -289,32 +244,16 @@ async function startRealTimeStream() {
 function stopRealTimeStream() {
   isStreaming = false;
 
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    mediaRecorder.stop();
+  // Clean up keyboard listeners
+  if (window.cleanupKeyboardListeners) {
+    window.cleanupKeyboardListeners();
+    window.cleanupKeyboardListeners = null;
   }
-
-  if (streamingInterval) {
-    clearInterval(streamingInterval);
-    streamingInterval = null;
-  }
-
-  // Clean up audio context
-  if (audioContext) {
-    audioContext.close();
-    audioContext = null;
-    analyser = null;
-  }
-
-  // Reset speech detection variables
-  isSpeaking = false;
-  speechStartTime = null;
-  speechEndTime = null;
-  audioChunks = [];
 
   resetStreamButtons();
   streamingStatus.textContent = '⏸️ Streaming stopped';
   streamingStatus.className = 'status';
-  log('Real-time streaming stopped');
+  log('Push-to-record streaming stopped');
 }
 
 function resetStreamButtons() {
@@ -323,105 +262,268 @@ function resetStreamButtons() {
   updateStreamButtonState();
 }
 
-// Function to get current audio level for silence detection
-function getAudioLevel() {
-  if (!analyser) return 0;
-
-  const bufferLength = analyser.frequencyBinCount;
-  const dataArray = new Uint8Array(bufferLength);
-  analyser.getByteFrequencyData(dataArray);
-
-  // Calculate average volume
-  let sum = 0;
-  for (let i = 0; i < bufferLength; i++) {
-    sum += dataArray[i];
-  }
-  const average = sum / bufferLength;
-
-  // Convert to percentage (0-100)
-  return Math.round((average / 255) * 100);
+function log(msg) {
+  console.log(msg); // Use console.log instead since there's no log element in the UI
 }
 
-async function processAudioChunks() {
-  if (audioChunks.length === 0) return;
+// Context Management Event Listeners
+
+// Save context button
+saveContextButton.addEventListener('click', async () => {
+  const context = contextInput.value.trim();
+  if (!context) {
+    contextStatus.textContent = '⚠️ Please enter some context text';
+    contextStatus.className = 'status warning';
+    return;
+  }
 
   try {
-    // Combine chunks into a single blob - determine the correct MIME type
-    let mimeType = 'audio/webm';
-    if (mediaRecorder && mediaRecorder.mimeType) {
-      mimeType = mediaRecorder.mimeType;
+    const result = await window.electronAPI.saveContext(context);
+    if (result.success) {
+      contextStatus.textContent = '✅ Context saved successfully!';
+      contextStatus.className = 'status success';
+      log('Context saved: ' + context.substring(0, 50) + '...');
     }
-
-    const audioBlob = new Blob(audioChunks, { type: mimeType });
-    audioChunks = []; // Clear processed chunks
-
-    // Convert blob to array buffer for transmission
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-
-    // Send to OpenAI for transcription
-    const transcriptionResult = await window.electronAPI.transcribeAudio(uint8Array);
-
-    if (transcriptionResult.success && transcriptionResult.text.trim()) {
-      log(`Transcribed: "${transcriptionResult.text}"`);
-
-      // Get AI response
-      const chatResult = await window.electronAPI.chatCompletion(transcriptionResult.text);
-
-      if (chatResult.success) {
-        // Clear placeholder message if it exists
-        if (openaiResponse.innerHTML.includes('Start streaming to begin')) {
-          openaiResponse.innerHTML = '';
-        }
-
-        openaiResponse.innerHTML += `
-          <div class="conversation-item user">
-            <div class="conversation-label">👤 System Audio</div>
-            ${transcriptionResult.text}
-          </div>
-          <div class="conversation-item ai">
-            <div class="conversation-label">🤖 AI Assistant</div>
-            ${chatResult.response}
-          </div>
-        `;
-        openaiResponse.scrollTop = openaiResponse.scrollHeight;
-        
-        // Update status to show successful processing
-        streamingStatus.textContent = '🔴 Ready for more audio...';
-        streamingStatus.className = 'status success';
-      } else {
-        log('Chat error: ' + chatResult.error);
-        streamingStatus.textContent = '🔴 Chat error - continuing to listen...';
-        streamingStatus.className = 'status warning';
-      }
-    } else if (!transcriptionResult.success) {
-      // Log the error but continue processing
-      log('Transcription failed: ' + transcriptionResult.error);
-      streamingStatus.textContent = '🔴 Audio format issue - continuing...';
-      streamingStatus.className = 'status warning';
-    } else {
-      log('No transcription text received');
-    }
-
   } catch (error) {
-    log('Processing error: ' + error.message);
-    streamingStatus.textContent = '🔴 Processing error - continuing...';
-    streamingStatus.className = 'status warning';
+    contextStatus.textContent = '❌ Error saving context: ' + error.message;
+    contextStatus.className = 'status error';
+  }
+});
+
+// Clear context button
+clearContextButton.addEventListener('click', async () => {
+  try {
+    const result = await window.electronAPI.clearContext();
+    if (result.success) {
+      contextInput.value = '';
+      uploadedFiles.innerHTML = '';
+      contextStatus.textContent = '✅ Context and files cleared!';
+      contextStatus.className = 'status success';
+      log('Context and files cleared');
+    }
+  } catch (error) {
+    contextStatus.textContent = '❌ Error clearing context: ' + error.message;
+    contextStatus.className = 'status error';
+  }
+});
+
+// File input change event
+fileInput.addEventListener('change', handleFileSelection);
+
+// Drag and drop functionality
+fileDropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  fileDropZone.classList.add('drag-over');
+});
+
+fileDropZone.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  fileDropZone.classList.remove('drag-over');
+});
+
+fileDropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  fileDropZone.classList.remove('drag-over');
+  const files = Array.from(e.dataTransfer.files);
+  handleFiles(files);
+});
+
+fileDropZone.addEventListener('click', (e) => {
+  e.preventDefault();
+  fileInput.click();
+});
+
+// File handling functions
+async function handleFileSelection(event) {
+  const files = Array.from(event.target.files);
+  handleFiles(files);
+}
+
+async function handleFiles(files) {
+  for (const file of files) {
+    // Check file type
+    const allowedTypes = ['.pdf', '.txt', '.docx'];
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+
+    if (!allowedTypes.includes(fileExtension)) {
+      showFileStatus(file.name, 'error', 'Unsupported file type');
+      continue;
+    }
+
+    // Check file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      showFileStatus(file.name, 'error', 'File too large (max 10MB)');
+      continue;
+    }
+
+    // Add file to UI with processing status
+    addFileToUI(file.name, file.size, 'processing');
+
+    try {
+      // Convert file to buffer
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      // Upload and parse file
+      const result = await window.electronAPI.uploadFile(file.name, uint8Array);
+
+      if (result.success) {
+        updateFileStatus(file.name, 'completed', `Parsed (${result.contentLength} chars)`);
+        log(`File uploaded: ${file.name} (${result.contentLength} characters extracted)`);
+
+        contextStatus.textContent = '✅ File uploaded and parsed successfully!';
+        contextStatus.className = 'status success';
+      } else {
+        updateFileStatus(file.name, 'error', result.error);
+        log(`File upload failed: ${file.name} - ${result.error}`);
+      }
+    } catch (error) {
+      updateFileStatus(file.name, 'error', error.message);
+      log(`File processing error: ${file.name} - ${error.message}`);
+    }
+  }
+
+  // Clear file input
+  fileInput.value = '';
+}
+
+function addFileToUI(fileName, fileSize, status) {
+  const fileItem = document.createElement('div');
+  fileItem.className = 'file-item';
+  fileItem.setAttribute('data-filename', fileName);
+
+  const sizeInMB = (fileSize / (1024 * 1024)).toFixed(2);
+
+  fileItem.innerHTML = `
+    <div class="file-info">
+      <div class="file-name">${fileName}</div>
+      <div class="file-size">${sizeInMB} MB</div>
+    </div>
+    <div class="file-status ${status}">
+      ${status === 'processing' ? 'Processing...' : status}
+    </div>
+    <button class="btn-remove" onclick="removeFile('${fileName}')">×</button>
+  `;
+
+  uploadedFiles.appendChild(fileItem);
+}
+
+function updateFileStatus(fileName, status, message) {
+  const fileItem = document.querySelector(`[data-filename="${fileName}"]`);
+  if (fileItem) {
+    const statusElement = fileItem.querySelector('.file-status');
+    statusElement.className = `file-status ${status}`;
+    statusElement.textContent = message;
   }
 }
 
-function log(msg) {
-  logElement.innerText += `${msg}\n`;
+function showFileStatus(fileName, status, message) {
+  contextStatus.textContent = `${status === 'error' ? '❌' : '✅'} ${fileName}: ${message}`;
+  contextStatus.className = `status ${status}`;
 }
 
-function wait(delayInMS) {
-  return new Promise((resolve) => setTimeout(resolve, delayInMS));
+async function removeFile(fileName) {
+  try {
+    const result = await window.electronAPI.removeFile(fileName);
+    if (result.success) {
+      // Remove from UI
+      const fileItem = document.querySelector(`[data-filename="${fileName}"]`);
+      if (fileItem) {
+        fileItem.remove();
+      }
+
+      contextStatus.textContent = '✅ File removed from context';
+      contextStatus.className = 'status success';
+      log(`File removed: ${fileName}`);
+    }
+  } catch (error) {
+    contextStatus.textContent = '❌ Error removing file: ' + error.message;
+    contextStatus.className = 'status error';
+  }
 }
-function stop(stream) {
-  stream.getTracks().forEach((track) => track.stop());
+
+// Load context and files on startup
+async function loadExistingContext() {
+  try {
+    // Load saved context
+    const contextResult = await window.electronAPI.getContext();
+    if (contextResult.success && contextResult.context) {
+      contextInput.value = contextResult.context;
+    }
+
+    // Load uploaded files
+    const filesResult = await window.electronAPI.getUploadedFiles();
+    if (filesResult.success && filesResult.files.length > 0) {
+      for (const file of filesResult.files) {
+        addFileToUI(file.name, file.contentLength * 2, 'completed'); // Rough size estimate
+        updateFileStatus(file.name, 'completed', `${file.contentLength} chars`);
+      }
+    }
+  } catch (error) {
+    log('Error loading existing context: ' + error.message);
+  }
 }
+
+function checkFirstTime() {
+  const guideSeen = localStorage.getItem('aiHelper_guideSeen');
+  if (!guideSeen) {
+    // Show guide after a short delay for better UX
+    setTimeout(() => {
+      document.getElementById('guideOverlay').style.display = 'flex';
+    }, 500);
+  }
+}
+
+// Guide overlay functionality with proper event listeners
+function showGuide() {
+  console.log('showGuide called');
+  const overlay = document.getElementById('guideOverlay');
+  console.log('overlay element:', overlay);
+  if (overlay) {
+    overlay.style.display = 'flex';
+    console.log('overlay shown');
+  }
+}
+
+function closeGuide() {
+  console.log('closeGuide called');
+  const overlay = document.getElementById('guideOverlay');
+  console.log('overlay element:', overlay);
+  if (overlay) {
+    overlay.style.display = 'none';
+    localStorage.setItem('aiHelper_guideSeen', 'true');
+    console.log('overlay closed');
+  }
+}
+
+
 
 // Initialize the app
-document.addEventListener('DOMContentLoaded', () => {
-  checkApiKeyStatus();
-});
+
+checkApiKeyStatus();
+loadExistingContext();
+checkFirstTime();
+
+// Help button
+if (helpBtn) {
+  helpBtn.addEventListener('click', showGuide);
+
+  // Add hover effects
+  helpBtn.addEventListener('mouseover', function () {
+    this.style.background = 'rgba(255,255,255,0.3)';
+  });
+  helpBtn.addEventListener('mouseout', function () {
+    this.style.background = 'rgba(255,255,255,0.2)';
+  });
+}
+
+// Close button (X)
+if (closeGuideBtn) {
+  closeGuideBtn.addEventListener('click', closeGuide);
+}
+
+// Got it button
+if (gotItBtn) {
+  gotItBtn.addEventListener('click', closeGuide);
+}
+

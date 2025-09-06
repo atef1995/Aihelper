@@ -1,19 +1,133 @@
 {
   "name": "aihelper",
   "version": "1.0.0",
-  "description": "an app",
+  "description": "Real-time Audio Assistant powered by OpenAI - Transcribe system audio and get intelligent AI responses with context management and file upload support",
   "license": "MIT",
-  "author": "atefcodes",
+  "author": {
+    "name": "atefcodes",
+    "email": "atefcodes@gmail.com"
+  },
+  "homepage": "https://github.com/atefcodes/aihelper",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/atefcodes/aihelper.git"
+  },
   "type": "commonjs",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "dist": "npm run build",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "build": {
+    "appId": "com.atefcodes.aihelper",
+    "productName": "AI Helper",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "publisherName": "atefcodes"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "atefcodes",
+      "repo": "aihelper"
+    }
   },
   "devDependencies": {
-    "electron": "^38.0.0"
+    "@electron-forge/publisher-github": "^7.8.3",
+    "electron": "^38.0.0",
+    "electron-builder": "^24.9.1"
   },
   "dependencies": {
-    "openai": "^5.19.1"
+    "fluent-ffmpeg": "^2.1.2",
+    "mammoth": "^1.6.0",
+    "openai": "^5.19.1",
+    "pdf-parse": "^1.1.1"
   }
 }

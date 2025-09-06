@@ -3,7 +3,7 @@
   <head>
     <title>AI Helper - Audio Assistant</title>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; connect-src 'self' https://api.openai.com; style-src 'self' 'unsafe-inline'"
@@ -16,7 +16,7 @@
       }
 
       body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         min-height: 100vh;
         padding: 20px;
@@ -28,7 +28,7 @@
         margin: 0 auto;
         background: white;
         border-radius: 20px;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
         overflow: hidden;
       }
 
@@ -37,6 +37,7 @@
         color: white;
         padding: 30px;
         text-align: center;
+        position: relative;
       }
 
       .header h1 {
@@ -72,7 +73,7 @@
       }
 
       .section-title::before {
-        content: '';
+        content: "";
         width: 4px;
         height: 20px;
         background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
@@ -211,7 +212,7 @@
         margin: 15px 0;
         padding: 15px;
         border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         animation: slideIn 0.3s ease-out;
       }
 
@@ -247,7 +248,7 @@
       .log-area {
         background: #1e1e1e;
         color: #00ff41;
-        font-family: 'Consolas', 'Monaco', monospace;
+        font-family: "Consolas", "Monaco", monospace;
         padding: 15px;
         border-radius: 8px;
         min-height: 120px;
@@ -275,98 +276,508 @@
         gap: 20px;
       }
 
+      /* Context Management Styles */
+      .context-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .context-group {
+        background: white;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #e9ecef;
+      }
+
+      .file-drop-zone {
+        border: 2px dashed #4facfe;
+        border-radius: 8px;
+        background: #f8f9ff;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .file-drop-zone:hover {
+        border-color: #0077ff;
+        background: #f0f8ff;
+      }
+
+      .file-drop-zone.drag-over {
+        border-color: #0077ff;
+        background: #e6f3ff;
+        transform: scale(1.02);
+      }
+
+      .uploaded-files {
+        margin-top: 15px;
+      }
+
+      .file-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        border: 1px solid #e9ecef;
+      }
+
+      .file-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex: 1;
+      }
+
+      .file-name {
+        font-weight: 500;
+        color: #495057;
+      }
+
+      .file-size {
+        font-size: 0.85em;
+        color: #6c757d;
+      }
+
+      .file-status {
+        font-size: 0.8em;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 500;
+      }
+
+      .file-status.processing {
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      .file-status.completed {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .file-status.error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      .btn-remove {
+        background: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 0.8em;
+        cursor: pointer;
+        transition: background-color 0.2s;
+      }
+
+      .btn-remove:hover {
+        background: #c82333;
+      }
+
       @media (max-width: 768px) {
         .container {
           margin: 10px;
           border-radius: 15px;
         }
-        
+
         .content {
           padding: 20px;
         }
-        
+
         .header {
           padding: 20px;
         }
-        
+
         .header h1 {
           font-size: 2em;
         }
-        
+
         .control-group {
           flex-direction: column;
         }
-        
+
         .btn {
           width: 100%;
           justify-content: center;
         }
-        
+
         .input-group {
           flex-direction: column;
         }
-        
+
         input[type="password"] {
           min-width: 100%;
         }
+
+        .file-item {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 10px;
+        }
+      }
+
+      /* Overlay Guide Styles */
+      .overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        backdrop-filter: blur(5px);
+      }
+
+      .guide-modal {
+        background: white;
+        border-radius: 20px;
+        padding: 40px;
+        max-width: 600px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        animation: slideInModal 0.5s ease-out;
+        position: relative;
+      }
+
+      @keyframes slideInModal {
+        from {
+          opacity: 0;
+          transform: translateY(-50px) scale(0.9);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .guide-header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      .guide-header h2 {
+        color: #4facfe;
+        font-size: 2em;
+        margin-bottom: 10px;
+      }
+
+      .guide-header p {
+        color: #6c757d;
+        font-size: 1.1em;
+      }
+
+      .guide-steps {
+        margin-bottom: 30px;
+      }
+
+      .guide-step {
+        display: flex;
+        align-items: flex-start;
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        border-left: 4px solid #4facfe;
+      }
+
+      .step-number {
+        background: #4facfe;
+        color: white;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 15px;
+        flex-shrink: 0;
+      }
+
+      .step-content h4 {
+        margin: 0 0 8px 0;
+        color: #495057;
+        font-size: 1.1em;
+      }
+
+      .step-content p {
+        margin: 0;
+        color: #6c757d;
+        line-height: 1.5;
+      }
+
+      .guide-footer {
+        text-align: center;
+        padding-top: 20px;
+        border-top: 1px solid #e9ecef;
+      }
+
+      .guide-footer button {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .guide-footer button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(79, 172, 254, 0.3);
+      }
+
+      .close-guide {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #6c757d;
+        cursor: pointer;
+        padding: 5px;
+        line-height: 1;
+      }
+
+      .close-guide:hover {
+        color: #495057;
       }
     </style>
   </head>
   <body>
+    <!-- First-time User Guide Overlay -->
+    <div id="guideOverlay" class="overlay" style="display: none">
+      <div class="guide-modal">
+        <button class="close-guide" id="closeGuideBtn">&times;</button>
+        <div class="guide-header">
+          <h2>🎤 Welcome to AI Helper!</h2>
+          <p>Your intelligent audio assistant powered by OpenAI</p>
+        </div>
+
+        <div class="guide-steps">
+          <div class="guide-step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+              <h4>Set Your OpenAI API Key</h4>
+              <p>
+                Enter your OpenAI API key in the configuration section to enable
+                transcription and AI responses.
+              </p>
+            </div>
+          </div>
+
+          <div class="guide-step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+              <h4>Add Context (Optional)</h4>
+              <p>
+                Provide additional context or upload files (PDF, TXT, DOCX) to
+                help the AI give more relevant responses.
+              </p>
+            </div>
+          </div>
+
+          <div class="guide-step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+              <h4>Start AI Stream</h4>
+              <p>
+                Click "Start AI Stream" to enable system audio capture. You'll
+                need to select your screen/audio source.
+              </p>
+            </div>
+          </div>
+
+          <div class="guide-step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+              <h4>Record with Spacebar</h4>
+              <p>
+                Hold SPACEBAR to record audio, release to stop and automatically
+                transcribe + get AI response.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="guide-footer">
+          <button id="gotItBtn">Got it! Let's start 🚀</button>
+        </div>
+      </div>
+    </div>
     <div class="container">
       <div class="header">
         <h1>🎤 AI Helper</h1>
         <p>Real-time Audio Assistant powered by OpenAI</p>
+        <button
+          id="helpBtn"
+          style="
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+          "
+        >
+          ❓ Help
+        </button>
       </div>
-      
+
       <div class="content">
         <!-- API Key Configuration Section -->
         <div class="section">
           <div class="section-title">🔐 API Configuration</div>
           <div class="input-group">
-            <input type="password" id="apiKeyInput" placeholder="Enter your OpenAI API key">
-            <button id="setApiKeyButton" type="button" class="btn btn-primary">Set API Key</button>
+            <input
+              type="password"
+              id="apiKeyInput"
+              placeholder="Enter your OpenAI API key"
+            />
+            <button id="setApiKeyButton" type="button" class="btn btn-primary">
+              Set API Key
+            </button>
           </div>
           <div id="apiKeyStatus" class="status"></div>
         </div>
 
         <div class="grid">
-          <!-- Audio Controls Section -->
+          <!-- Context Management Section -->
           <div class="section">
-            <div class="section-title">🎵 Audio Controls</div>
-            <div class="control-group">
-              <button id="startButton" title="Start Recording" type="button" class="btn btn-secondary">📹 Start Recording</button>
-              <button id="stopButton" title="Stop Recording" type="button" class="btn btn-danger" disabled>⏹️ Stop Recording</button>
+            <div class="section-title">📄 Context Management</div>
+            <div class="context-controls">
+              <!-- Text Context Input -->
+              <div class="context-group">
+                <label
+                  for="contextInput"
+                  style="display: block; margin-bottom: 8px; font-weight: 500"
+                  >Additional Context:</label
+                >
+                <textarea
+                  id="contextInput"
+                  placeholder="Add any context that would help the AI provide better responses..."
+                  style="
+                    width: 100%;
+                    min-height: 100px;
+                    padding: 12px;
+                    border: 2px solid #e9ecef;
+                    border-radius: 8px;
+                    font-family: inherit;
+                    resize: vertical;
+                  "
+                ></textarea>
+                <div class="input-group" style="margin-top: 10px">
+                  <button
+                    id="saveContextButton"
+                    type="button"
+                    class="btn btn-primary"
+                  >
+                    💾 Save Context
+                  </button>
+                  <button
+                    id="clearContextButton"
+                    type="button"
+                    class="btn btn-secondary"
+                  >
+                    🗑️ Clear Context
+                  </button>
+                </div>
+              </div>
+
+              <!-- File Upload -->
+              <div class="context-group" style="margin-top: 20px">
+                <label
+                  for="fileInput"
+                  style="display: block; margin-bottom: 8px; font-weight: 500"
+                  >Upload Files (PDF, TXT, DOCX):</label
+                >
+                <div class="file-upload-area">
+                  <input
+                    type="file"
+                    id="fileInput"
+                    multiple
+                    accept=".pdf,.txt,.docx"
+                    style="display: none"
+                  />
+                  <div id="fileDropZone" class="file-drop-zone">
+                    <div style="text-align: center; padding: 20px">
+                      <p>📎 Click to select files or drag & drop here</p>
+                      <p
+                        style="
+                          font-size: 0.9em;
+                          margin-top: 5px;
+                          color: #6c757d;
+                        "
+                      >
+                        Supported: PDF, TXT, DOCX
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div id="uploadedFiles" class="uploaded-files"></div>
+              </div>
+
+              <!-- Context Status -->
+              <div
+                id="contextStatus"
+                class="status"
+                style="margin-top: 15px"
+              ></div>
             </div>
-            <div class="control-group" style="margin-top: 15px;">
-              <button id="streamButton" title="Start Real-time Stream to OpenAI" type="button" class="btn btn-success">🤖 Start AI Stream</button>
-              <button id="stopStreamButton" title="Stop Real-time Stream" type="button" class="btn btn-danger" disabled>⏸️ Stop AI Stream</button>
-            </div>
-            <div class="control-group" style="margin-top: 15px;">
-              <button id="downloadButton" disabled class="btn btn-secondary">
-                <a id="downloadLink" title="download" style="color: inherit; text-decoration: none;">⬇️ Download</a>
-              </button>
-            </div>
-            <div id="streamingStatus" class="status"></div>
-            <audio class="audio-element" controls></audio>
           </div>
 
-          <!-- System Log Section -->
+          <!-- AI Conversation Section -->
           <div class="section">
-            <div class="section-title">📊 System Log</div>
-            <div id="info" class="log-area"></div>
+            <div class="section-title">💬 AI Conversation</div>
+            <div id="openaiResponse" class="response-area">
+              <div style="text-align: center; color: #6c757d; margin-top: 50px">
+                <p>🎙️ Start streaming to begin your conversation with AI</p>
+                <p style="margin-top: 10px; font-size: 0.9em">
+                  Your audio will be transcribed and processed in real-time
+                </p>
+              </div>
+            </div>
           </div>
         </div>
-
-        <!-- AI Conversation Section -->
+        <!-- Audio Controls Section - Main Interface -->
         <div class="section">
-          <div class="section-title">💬 AI Conversation</div>
-          <div id="openaiResponse" class="response-area">
-            <div style="text-align: center; color: #6c757d; margin-top: 50px;">
-              <p>🎙️ Start streaming to begin your conversation with AI</p>
-              <p style="margin-top: 10px; font-size: 0.9em;">Your audio will be transcribed and processed in real-time</p>
-            </div>
+          <div class="section-title">🎵 Audio Controls</div>
+          <div class="control-group" style="margin-top: 15px">
+            <button
+              id="streamButton"
+              title="Start Real-time Stream to OpenAI"
+              type="button"
+              class="btn btn-success"
+            >
+              🤖 Start AI Stream
+            </button>
+            <button
+              id="stopStreamButton"
+              title="Stop Real-time Stream"
+              type="button"
+              class="btn btn-danger"
+              disabled
+            >
+              ⏸️ Stop AI Stream
+            </button>
           </div>
+          <div id="streamingStatus" class="status"></div>
+          <audio class="audio-element" controls style="display: none"></audio>
         </div>
       </div>
     </div>
