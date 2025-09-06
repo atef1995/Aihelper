@@ -113,11 +113,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "publish": {
-      "provider": "github",
-      "owner": "atef1995",
-      "repo": "aihelper"
-    }
+    "publish": null
   },
   "devDependencies": {
     "@electron-forge/publisher-github": "^7.8.3",
