@@ -4,13 +4,13 @@
   "description": "Real-time Audio Assistant powered by OpenAI - Transcribe system audio and get intelligent AI responses with context management and file upload support",
   "license": "MIT",
   "author": {
-    "name": "atefcodes",
+    "name": "atef1995",
     "email": "atefcodes@gmail.com"
   },
-  "homepage": "https://github.com/atefcodes/aihelper",
+  "homepage": "https://github.com/atef1995/aihelper",
   "repository": {
     "type": "git",
-    "url": "https://github.com/atefcodes/aihelper.git"
+    "url": "https://github.com/atef1995/aihelper.git"
   },
   "type": "commonjs",
   "main": "main.js",
@@ -24,7 +24,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "build": {
-    "appId": "com.atefcodes.aihelper",
+    "appId": "com.atef1995.aihelper",
     "productName": "AI Helper",
     "directories": {
       "output": "dist"
@@ -61,7 +61,7 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "publisherName": "atefcodes"
+      "publisherName": "atef1995"
     },
     "mac": {
       "target": [
@@ -115,7 +115,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "atefcodes",
+      "owner": "atef1995",
       "repo": "aihelper"
     }
   },
