@@ -1,6 +1,5 @@
 node_modules
 .prettierrc
-package-lock.json
 temp-audio*
 debug-audio*
 temp-uploads/
