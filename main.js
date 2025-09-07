@@ -73,7 +73,7 @@ ipcMain.handle('transcribe-audio', async (event, audioBlob, mimeType) => {
   if (!openai) {
     return { success: false, error: 'OpenAI API key not set. Please configure your API key first.' };
   }
-  
+
   let tempPath = null;
   try {
     // Create unique temp file name to avoid conflicts
@@ -88,28 +88,28 @@ ipcMain.handle('transcribe-audio', async (event, audioBlob, mimeType) => {
       else if (mimeType.includes('webm')) extension = '.webm';
     }
     tempPath = path.join(__dirname, `temp-audio-${timestamp}${extension}`);
-    
+
     // Write audio blob to temp file
     fs.writeFileSync(tempPath, Buffer.from(audioBlob));
-    
+
     // Verify file was created and has content
     const stats = fs.statSync(tempPath);
     console.log(`Temp file created: ${tempPath}, size: ${stats.size} bytes`);
-    
+
     if (stats.size === 0) {
       throw new Error('Generated audio file is empty');
     }
-    
+
     // Basic WebM validation
     if (extension === '.webm') {
       const buffer = Buffer.from(audioBlob);
       const hasWebMHeader = buffer.slice(0, 4).toString('hex') === '1a45dfa3';
       console.log(`WebM header check: ${hasWebMHeader ? 'VALID' : 'INVALID'}`);
-      
+
       if (!hasWebMHeader) {
         throw new Error('Invalid WebM file - missing EBML header');
       }
-      
+
       // Check file size - WebM files under 1KB or over 10MB are likely corrupted
       if (stats.size < 1000) {
         throw new Error('WebM file too small - likely corrupted');
@@ -118,18 +118,18 @@ ipcMain.handle('transcribe-audio', async (event, audioBlob, mimeType) => {
         throw new Error('WebM file too large - likely corrupted');
       }
     }
-    
+
     // Add more logging
     console.log(`Processing audio file: ${tempPath}`);
     console.log(`File size: ${stats.size} bytes`);
     console.log(`MIME type: ${mimeType || 'unknown'}`);
-    
+
     // Save a copy for debugging (keep last 3 files)
     const debugPath = path.join(__dirname, `debug-audio-${timestamp}${extension}`);
     try {
       fs.copyFileSync(tempPath, debugPath);
       console.log(`Debug copy saved: ${debugPath}`);
-      
+
       // Clean up old debug files (keep only last 3)
       const debugFiles = fs.readdirSync(__dirname)
         .filter(file => file.startsWith('debug-audio-'))
@@ -146,24 +146,24 @@ ipcMain.handle('transcribe-audio', async (event, audioBlob, mimeType) => {
     } catch (debugError) {
       console.log('Debug copy failed:', debugError.message);
     }
-    
+
     const transcription = await openai.audio.transcriptions.create({
       file: fs.createReadStream(tempPath),
       model: 'whisper-1',
       language: 'en'
     });
-    
+
     console.log(`Transcription successful: ${transcription.text}`);
 
     return { success: true, text: transcription.text };
   } catch (error) {
     console.error('Transcription error:', error);
-    
+
     let errorMessage = error.message;
     if (error.status === 400) {
       errorMessage = 'Audio format not supported or corrupted. Trying next audio chunk...';
     }
-    
+
     return { success: false, error: errorMessage };
   } finally {
     // Always clean up temp file, even if there was an error
@@ -175,12 +175,12 @@ ipcMain.handle('transcribe-audio', async (event, audioBlob, mimeType) => {
         console.error('Error cleaning up temp file:', cleanupError);
         // Try to clean up old temp files
         try {
-          const tempFiles = fs.readdirSync(__dirname).filter(file => 
+          const tempFiles = fs.readdirSync(__dirname).filter(file =>
             file.startsWith('temp-audio-') && (
-              file.endsWith('.webm') || 
-              file.endsWith('.wav') || 
-              file.endsWith('.mp3') || 
-              file.endsWith('.mp4') || 
+              file.endsWith('.webm') ||
+              file.endsWith('.wav') ||
+              file.endsWith('.mp3') ||
+              file.endsWith('.mp4') ||
               file.endsWith('.ogg')
             )
           );
@@ -230,21 +230,54 @@ async function parseDocxFile(filePath) {
 
 // Handle file upload and parsing
 ipcMain.handle('upload-file', async (event, fileName, fileBuffer) => {
-  const tempDir = path.join(__dirname, 'temp-uploads');
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-
-  const tempPath = path.join(tempDir, fileName);
-  
   try {
+    console.log(`Processing file upload: ${fileName}`);
+
+    const tempDir = path.join(__dirname, 'temp-uploads');
+    console.log(`Temp directory: ${tempDir}`);
+
+    // Ensure temp directory exists
+    if (!fs.existsSync(tempDir)) {
+      console.log('Creating temp directory...');
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    // Verify temp directory was created and is accessible
+    const tempDirStats = fs.statSync(tempDir);
+    if (!tempDirStats.isDirectory()) {
+      throw new Error(`Temp path exists but is not a directory: ${tempDir}`);
+    }
+
+    // Sanitize filename to avoid path issues with spaces and special characters
+    const timestamp = Date.now();
+    const extension = path.extname(fileName);
+    const baseName = path.basename(fileName, extension);
+    // More aggressive sanitization for Windows compatibility
+    const sanitizedName = `${baseName.replace(/[^a-zA-Z0-9.-]/g, '_')}_${timestamp}${extension}`;
+    const tempPath = path.resolve(tempDir, sanitizedName);
+
+    console.log(`Original filename: ${fileName}`);
+    console.log(`Sanitized filename: ${sanitizedName}`);
+    console.log(`Full temp path: ${tempPath}`);
+
+    // Verify the path looks correct
+    if (!tempPath.startsWith(tempDir)) {
+      throw new Error(`Security error: temp path outside temp directory`);
+    }
+
     // Write file to temp directory
+    console.log('Writing file to temp path...');
     fs.writeFileSync(tempPath, fileBuffer);
-    
-    // Parse file based on extension
-    const extension = path.extname(fileName).toLowerCase();
+    console.log('File written successfully');
+
+    // Verify the file was written correctly
+    const fileStats = fs.statSync(tempPath);
+    console.log(`File size: ${fileStats.size} bytes`);
+
     let parseResult;
-    
+
+    console.log(`Parsing file with extension: ${extension}`);
+
     switch (extension) {
       case '.pdf':
         parseResult = await parsePdfFile(tempPath);
@@ -258,22 +291,38 @@ ipcMain.handle('upload-file', async (event, fileName, fileBuffer) => {
       default:
         parseResult = { success: false, error: 'Unsupported file type' };
     }
-    
+
+    console.log(`Parse result: ${parseResult.success ? 'Success' : 'Failed'}`);
+    if (!parseResult.success) {
+      console.log(`Parse error: ${parseResult.error}`);
+    }
+
     // Clean up temp file
-    fs.unlinkSync(tempPath);
-    
+    if (fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+      console.log('Temp file cleaned up');
+    }
+
     if (parseResult.success) {
       // Store file content
       uploadedFilesContent.set(fileName, parseResult.content);
+      console.log(`File content stored for: ${fileName}`);
       return { success: true, fileName, contentLength: parseResult.content.length };
     } else {
       return { success: false, error: parseResult.error };
     }
-    
+
   } catch (error) {
+    console.error('File upload error:', error);
+
     // Clean up temp file if it exists
-    if (fs.existsSync(tempPath)) {
-      fs.unlinkSync(tempPath);
+    if (tempPath && fs.existsSync(tempPath)) {
+      try {
+        fs.unlinkSync(tempPath);
+        console.log('Temp file cleaned up after error');
+      } catch (cleanupError) {
+        console.error('Error cleaning up temp file:', cleanupError);
+      }
     }
     return { success: false, error: error.message };
   }
@@ -313,15 +362,15 @@ ipcMain.handle('chat-completion', async (event, text) => {
   if (!openai) {
     return { success: false, error: 'OpenAI API key not set. Please configure your API key first.' };
   }
-  
+
   try {
     // Build context message
     let contextMessage = '';
-    
+
     if (userContext.trim()) {
       contextMessage += `User Context: ${userContext}\n\n`;
     }
-    
+
     // Add file contents to context
     if (uploadedFilesContent.size > 0) {
       contextMessage += `Uploaded Files Content:\n`;
@@ -329,14 +378,14 @@ ipcMain.handle('chat-completion', async (event, text) => {
         contextMessage += `--- ${fileName} ---\n${content}\n\n`;
       }
     }
-    
+
     // Combine context with user query
     const fullMessage = contextMessage + `User Query: ${text}`;
-    
+
     const completion = await openai.chat.completions.create({
-      messages: [{ 
-        role: 'user', 
-        content: fullMessage 
+      messages: [{
+        role: 'user',
+        content: fullMessage
       }],
       model: 'gpt-3.5-turbo',
       max_tokens: 2000, // Allow longer responses due to context
