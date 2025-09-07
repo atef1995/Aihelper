@@ -2,7 +2,7 @@
   "name": "aihelper",
   "version": "1.0.0",
   "description": "Real-time Audio Assistant powered by OpenAI - Transcribe system audio and get intelligent AI responses with context management and file upload support",
-  "license": "MIT",
+  "license": "CC-BY-NC-4.0",
   "author": {
     "name": "atef1995",
     "email": "atefcodes@gmail.com"
@@ -114,13 +114,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "atef1995",
-        "repo": "aihelper"
-      }
-    ]
+    "publish": null
   },
   "devDependencies": {
     "@electron-forge/publisher-github": "^7.8.3",
