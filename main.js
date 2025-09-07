@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, session, desktopCapturer } = require('electron/main');
 const path = require('node:path');
+const os = require('node:os');
 const OpenAI = require('openai');
 const fs = require('fs');
 const pdfParse = require('pdf-parse');
@@ -21,6 +22,13 @@ const createWindow = () => {
 }
 
 app.whenReady().then(() => {
+  // Initialize temp directories on app start
+  try {
+    ensureTempDirectories();
+  } catch (error) {
+    console.error('Failed to initialize temp directories:', error);
+  }
+  
   createWindow()
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
@@ -46,6 +54,39 @@ let apiKey = process.env.OPENAI_API_KEY || null;
 // Context management
 let userContext = '';
 let uploadedFilesContent = new Map(); // Store file content by filename
+
+// Helper function to get proper temp directories using Electron best practices
+function getTempDirectories() {
+  const userDataPath = app.getPath('userData');
+  const tempPath = app.getPath('temp');
+  
+  return {
+    // Use app's userData directory for file uploads (persistent across sessions)
+    uploadsDir: path.join(userDataPath, 'temp-uploads'),
+    // Use system temp directory for audio files (cleaned up automatically)
+    audioDir: path.join(tempPath, 'aihelper-audio')
+  };
+}
+
+// Ensure temp directories exist
+function ensureTempDirectories() {
+  const { uploadsDir, audioDir } = getTempDirectories();
+  
+  try {
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      console.log(`Created uploads directory: ${uploadsDir}`);
+    }
+    
+    if (!fs.existsSync(audioDir)) {
+      fs.mkdirSync(audioDir, { recursive: true });
+      console.log(`Created audio directory: ${audioDir}`);
+    }
+  } catch (error) {
+    console.error('Error creating temp directories:', error);
+    throw error;
+  }
+}
 
 function initializeOpenAI() {
   if (apiKey) {
@@ -87,7 +128,9 @@ ipcMain.handle('transcribe-audio', async (event, audioBlob, mimeType) => {
       else if (mimeType.includes('ogg')) extension = '.ogg';
       else if (mimeType.includes('webm')) extension = '.webm';
     }
-    tempPath = path.join(__dirname, `temp-audio-${timestamp}${extension}`);
+    const { audioDir } = getTempDirectories();
+    ensureTempDirectories();
+    tempPath = path.join(audioDir, `temp-audio-${timestamp}${extension}`);
 
     // Write audio blob to temp file
     fs.writeFileSync(tempPath, Buffer.from(audioBlob));
@@ -125,20 +168,20 @@ ipcMain.handle('transcribe-audio', async (event, audioBlob, mimeType) => {
     console.log(`MIME type: ${mimeType || 'unknown'}`);
 
     // Save a copy for debugging (keep last 3 files)
-    const debugPath = path.join(__dirname, `debug-audio-${timestamp}${extension}`);
+    const debugPath = path.join(audioDir, `debug-audio-${timestamp}${extension}`);
     try {
       fs.copyFileSync(tempPath, debugPath);
       console.log(`Debug copy saved: ${debugPath}`);
 
       // Clean up old debug files (keep only last 3)
-      const debugFiles = fs.readdirSync(__dirname)
+      const debugFiles = fs.readdirSync(audioDir)
         .filter(file => file.startsWith('debug-audio-'))
         .sort()
         .reverse();
       if (debugFiles.length > 3) {
         debugFiles.slice(3).forEach(file => {
           try {
-            fs.unlinkSync(path.join(__dirname, file));
+            fs.unlinkSync(path.join(audioDir, file));
             console.log(`Cleaned up old debug file: ${file}`);
           } catch (e) { /* ignore */ }
         });
@@ -175,22 +218,25 @@ ipcMain.handle('transcribe-audio', async (event, audioBlob, mimeType) => {
         console.error('Error cleaning up temp file:', cleanupError);
         // Try to clean up old temp files
         try {
-          const tempFiles = fs.readdirSync(__dirname).filter(file =>
-            file.startsWith('temp-audio-') && (
-              file.endsWith('.webm') ||
-              file.endsWith('.wav') ||
-              file.endsWith('.mp3') ||
-              file.endsWith('.mp4') ||
-              file.endsWith('.ogg')
-            )
-          );
-          tempFiles.forEach(file => {
-            const filePath = path.join(__dirname, file);
-            if (fs.existsSync(filePath)) {
-              fs.unlinkSync(filePath);
-              console.log(`Cleaned up old temp file: ${file}`);
-            }
-          });
+          const { audioDir } = getTempDirectories();
+          if (fs.existsSync(audioDir)) {
+            const tempFiles = fs.readdirSync(audioDir).filter(file =>
+              file.startsWith('temp-audio-') && (
+                file.endsWith('.webm') ||
+                file.endsWith('.wav') ||
+                file.endsWith('.mp3') ||
+                file.endsWith('.mp4') ||
+                file.endsWith('.ogg')
+              )
+            );
+            tempFiles.forEach(file => {
+              const filePath = path.join(audioDir, file);
+              if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+                console.log(`Cleaned up old temp file: ${file}`);
+              }
+            });
+          }
         } catch (cleanupAllError) {
           console.error('Error cleaning up old temp files:', cleanupAllError);
         }
@@ -230,22 +276,19 @@ async function parseDocxFile(filePath) {
 
 // Handle file upload and parsing
 ipcMain.handle('upload-file', async (event, fileName, fileBuffer) => {
+  let tempPath = null; // Declare tempPath outside try block so it's available in catch
+  
   try {
     console.log(`Processing file upload: ${fileName}`);
 
-    const tempDir = path.join(__dirname, 'temp-uploads');
-    console.log(`Temp directory: ${tempDir}`);
+    const { uploadsDir } = getTempDirectories();
+    ensureTempDirectories();
+    console.log(`Upload directory: ${uploadsDir}`);
 
-    // Ensure temp directory exists
-    if (!fs.existsSync(tempDir)) {
-      console.log('Creating temp directory...');
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-
-    // Verify temp directory was created and is accessible
-    const tempDirStats = fs.statSync(tempDir);
+    // Verify temp directory is accessible
+    const tempDirStats = fs.statSync(uploadsDir);
     if (!tempDirStats.isDirectory()) {
-      throw new Error(`Temp path exists but is not a directory: ${tempDir}`);
+      throw new Error(`Upload path exists but is not a directory: ${uploadsDir}`);
     }
 
     // Sanitize filename to avoid path issues with spaces and special characters
@@ -254,15 +297,15 @@ ipcMain.handle('upload-file', async (event, fileName, fileBuffer) => {
     const baseName = path.basename(fileName, extension);
     // More aggressive sanitization for Windows compatibility
     const sanitizedName = `${baseName.replace(/[^a-zA-Z0-9.-]/g, '_')}_${timestamp}${extension}`;
-    const tempPath = path.resolve(tempDir, sanitizedName);
+    tempPath = path.resolve(uploadsDir, sanitizedName);
 
     console.log(`Original filename: ${fileName}`);
     console.log(`Sanitized filename: ${sanitizedName}`);
     console.log(`Full temp path: ${tempPath}`);
 
     // Verify the path looks correct
-    if (!tempPath.startsWith(tempDir)) {
-      throw new Error(`Security error: temp path outside temp directory`);
+    if (!tempPath.startsWith(uploadsDir)) {
+      throw new Error(`Security error: temp path outside upload directory`);
     }
 
     // Write file to temp directory
