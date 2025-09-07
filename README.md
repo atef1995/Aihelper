@@ -66,34 +66,6 @@ npm run build:linux  # Linux
 
 This project is configured for automated builds and releases using GitHub Actions.
 
-#### Setup:
-
-1. **Push your code to GitHub**
-2. **Add app icons** (optional but recommended):
-   - `assets/icon.ico` - Windows icon (256x256 or larger)
-   - `assets/icon.icns` - macOS icon (512x512 or larger)
-   - `assets/icon.png` - Linux icon (512x512 PNG)
-
-#### Creating a Release:
-
-1. **Create and push a version tag**:
-
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-
-2. **GitHub Actions will automatically**:
-   - Build the app for Windows, macOS, and Linux
-   - Create installers and portable versions
-   - Upload artifacts to GitHub Releases
-
-#### Available Formats:
-
-- **Windows**: NSIS installer (`.exe`) and portable (`.exe`)
-- **macOS**: DMG installer (`.dmg`) and ZIP archive (`.zip`)
-- **Linux**: AppImage (`.AppImage`), DEB package (`.deb`), and RPM package (`.rpm`)
-
 ## File Structure
 
 ```
