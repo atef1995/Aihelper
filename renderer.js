@@ -402,8 +402,12 @@ function addFileToUI(fileName, fileSize, status) {
     <div class="file-status ${status}">
       ${status === 'processing' ? 'Processing...' : status}
     </div>
-    <button class="btn-remove" onclick="removeFile('${fileName}')">×</button>
+    <button class="btn-remove">×</button>
   `;
+
+  // Add event listener to the remove button
+  const removeBtn = fileItem.querySelector('.btn-remove');
+  removeBtn.addEventListener('click', () => removeFile(fileName));
 
   uploadedFiles.appendChild(fileItem);
 }
