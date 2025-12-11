@@ -33,5 +33,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // File management methods
   uploadFile: (fileName, fileBuffer) => ipcRenderer.invoke('upload-file', fileName, fileBuffer),
   removeFile: (fileName) => ipcRenderer.invoke('remove-file', fileName),
-  getUploadedFiles: () => ipcRenderer.invoke('get-uploaded-files')
+  getUploadedFiles: () => ipcRenderer.invoke('get-uploaded-files'),
+
+  // Update management
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  openExternalURL: (url) => ipcRenderer.invoke('open-external-url', url)
 });

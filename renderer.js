@@ -34,6 +34,10 @@ const systemPromptInput = document.getElementById('systemPromptInput');
 const systemPromptInfo = document.getElementById('systemPromptInfo');
 const saveSystemPromptButton = document.getElementById('saveSystemPromptButton');
 const clearSystemPromptButton = document.getElementById('clearSystemPromptButton');
+
+// Support buttons
+const updateBtn = document.getElementById('updateBtn');
+const coffeeBtn = document.getElementById('coffeeBtn');
 let apiKeyConfigured = false;
 let modelSelected = 'gpt-3.5-turbo';
 let currentRecorder = null;
@@ -844,6 +848,26 @@ function closeGuide() {
   }
 }
 
+// Auto-check for updates on app start (silent if no update)
+async function autoCheckForUpdates() {
+  try {
+    const result = await window.electronAPI.checkForUpdates();
+
+    if (result.success && result.isUpdateAvailable) {
+      // Only show notification if update is available
+      const message = `🎉 New version ${result.latestVersion} is available!\nCurrent version: ${result.currentVersion}\n\nWould you like to visit the release page?`;
+
+      if (confirm(message)) {
+        await window.electronAPI.openExternalURL(result.releaseUrl);
+      }
+    }
+    // Silent if no update available or error - don't bother the user
+  } catch (error) {
+    // Silently fail - don't show error on startup
+    console.log('Silent auto-update check: ' + error.message);
+  }
+}
+
 
 
 // Initialize the app
@@ -854,17 +878,44 @@ initializeSystemPrompts();
 loadExistingContext();
 checkFirstTime();
 
+// Auto-check for updates on app start (silent)
+autoCheckForUpdates();
+
+// Check for updates button
+if (updateBtn) {
+  updateBtn.addEventListener('click', async () => {
+    updateBtn.disabled = true;
+    updateBtn.textContent = '⏳ Checking...';
+
+    try {
+      const result = await window.electronAPI.checkForUpdates();
+
+      if (result.success) {
+        if (result.isUpdateAvailable) {
+          const message = `New version ${result.latestVersion} is available!\nCurrent version: ${result.currentVersion}\n\nWould you like to visit the release page?`;
+
+          if (confirm(message)) {
+            await window.electronAPI.openExternalURL(result.releaseUrl);
+          }
+        } else {
+          alert(`✅ You are running the latest version (${result.currentVersion})!`);
+        }
+      } else {
+        alert('⚠️ ' + (result.error || 'Could not check for updates. Please try again later.'));
+      }
+    } catch (error) {
+      alert('❌ Error checking for updates: ' + error.message);
+      log('Update check error: ' + error.message);
+    } finally {
+      updateBtn.disabled = false;
+      updateBtn.textContent = '✨ Check Updates';
+    }
+  });
+}
+
 // Help button
 if (helpBtn) {
   helpBtn.addEventListener('click', showGuide);
-
-  // Add hover effects
-  helpBtn.addEventListener('mouseover', function () {
-    this.style.background = 'rgba(255,255,255,0.3)';
-  });
-  helpBtn.addEventListener('mouseout', function () {
-    this.style.background = 'rgba(255,255,255,0.2)';
-  });
 }
 
 // Close button (X)

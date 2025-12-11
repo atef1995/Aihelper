@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, session, desktopCapturer } = require('electron/main');
+const { app, BrowserWindow, ipcMain, session, desktopCapturer, shell } = require('electron/main');
 const path = require('node:path');
 const os = require('node:os');
 const OpenAI = require('openai');
@@ -799,6 +799,64 @@ ipcMain.handle('chat-completion-stream', async (event, text, model, systemPrompt
 
 // Initialize OpenAI on app start
 initializeOpenAI();
+
+// Check for updates handler
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const response = await fetch('https://api.github.com/repos/atef1995/Aihelper/releases/latest', {
+      headers: {
+        'User-Agent': 'AI-Helper-Desktop'
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const latestVersion = data.tag_name || data.name || '';
+
+      // Read current version from package.json
+      let currentVersion = '1.0.0';
+      try {
+        const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
+        currentVersion = packageJson.version || '1.0.0';
+      } catch (error) {
+        console.log('Could not read package.json:', error.message);
+      }
+
+      return {
+        success: true,
+        latestVersion: latestVersion,
+        currentVersion: currentVersion,
+        releaseUrl: data.html_url,
+        releaseNotes: data.body,
+        isUpdateAvailable: latestVersion && latestVersion !== currentVersion
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Failed to fetch release information',
+      isUpdateAvailable: false
+    };
+  } catch (error) {
+    console.error('Update check error:', error);
+    return {
+      success: false,
+      error: error.message,
+      isUpdateAvailable: false
+    };
+  }
+});
+
+// Open external URL in default browser
+ipcMain.handle('open-external-url', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening external URL:', error);
+    return { success: false, error: error.message };
+  }
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {

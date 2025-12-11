@@ -378,17 +378,77 @@
         background: #c82333;
       }
 
+      /* Header buttons styling */
+      .header-buttons {
+        display: flex;
+        gap: 10px;
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .header-btn {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 8px;
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+
+      .header-btn:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .header-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .header-btn.coffee-btn {
+        background: rgba(255, 193, 7, 0.3);
+        border: 1px solid rgba(255, 193, 7, 0.5);
+      }
+
+      .header-btn.coffee-btn:hover {
+        background: rgba(255, 193, 7, 0.5);
+      }
+
       @media (max-width: 768px) {
+        .header {
+          padding: 20px;
+          padding-top: 80px;
+        }
+
+        .header-buttons {
+          position: absolute;
+          top: 15px;
+          right: 15px;
+          gap: 5px;
+          flex-wrap: wrap;
+          max-width: calc(100% - 30px);
+        }
+
+        .header-btn {
+          font-size: 12px;
+          padding: 6px 10px;
+        }
+
         .container {
           margin: 10px;
           border-radius: 15px;
         }
 
         .content {
-          padding: 20px;
-        }
-
-        .header {
           padding: 20px;
         }
 
@@ -417,6 +477,34 @@
           flex-direction: column;
           align-items: flex-start;
           gap: 10px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .header {
+          padding: 15px;
+          padding-top: 120px;
+        }
+
+        .header h1 {
+          font-size: 1.5em;
+        }
+
+        .header p {
+          font-size: 0.9em;
+        }
+
+        .header-buttons {
+          top: 10px;
+          right: 10px;
+          gap: 3px;
+          flex-direction: column;
+          align-items: flex-end;
+        }
+
+        .header-btn {
+          font-size: 11px;
+          padding: 5px 8px;
         }
       }
 
@@ -702,24 +790,28 @@
       <div class="header">
         <h1>🎤 AI Helper</h1>
         <p>Real-time Audio Assistant powered by OpenAI</p>
-        <button
-          id="helpBtn"
-          style="
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px;
-            padding: 8px 16px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s ease;
-          "
-        >
-          ❓ Help
-        </button>
+        <div class="header-buttons">
+          <a
+            id="coffeeBtn"
+            href="https://buymeacoffee.com/atefcodes"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Support us with coffee ☕"
+            class="header-btn coffee-btn"
+          >
+            ☕ Buy Me Coffee
+          </a>
+          <button
+            id="updateBtn"
+            title="Check for new versions"
+            class="header-btn"
+          >
+            ✨ Check Updates
+          </button>
+          <button id="helpBtn" title="Show help guide" class="header-btn">
+            ❓ Help
+          </button>
+        </div>
       </div>
 
       <div class="content">
