@@ -33,6 +33,13 @@ jobs:
       - name: Install electron-builder
         run: npm install --save-dev electron-builder
 
+      - name: Update version in package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          $version = '${{ github.ref }}'.Replace('refs/tags/v', '')
+          (Get-Content package.json) -replace '"version": "[^"]*"', "`"version`": `"$version`"" | Set-Content package.json
+        shell: pwsh
+
       - name: Build Electron app
         run: npm run build
 

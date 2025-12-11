@@ -5,6 +5,9 @@ debug-audio*
 temp-uploads/
 renderer_backup.js
 .claude
+.env
+.env.local
+.env.*.local
 
 # Build outputs
 dist/
