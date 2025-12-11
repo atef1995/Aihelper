@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <title>AI Helper - Audio Assistant</title>
@@ -552,6 +552,76 @@
       .close-guide:hover {
         color: #495057;
       }
+
+      /* Model Selection Styles */
+      .model-selector {
+        display: flex;
+        gap: 15px;
+        align-items: flex-end;
+        flex-wrap: wrap;
+      }
+
+      select {
+        padding: 12px 16px;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        font-size: 14px;
+        background: white;
+        color: #495057;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        min-width: 300px;
+      }
+
+      select:focus {
+        outline: none;
+        border-color: #4facfe;
+        box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+      }
+
+      .model-info {
+        background: #e7f3ff;
+        border-left: 4px solid #4facfe;
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #0066cc;
+        flex: 1;
+        min-width: 250px;
+      }
+
+      .model-description {
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+
+      .model-cost {
+        font-size: 12px;
+        color: #0052a3;
+      }
+
+      .ready-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        background: #d4edda;
+        color: #155724;
+        border-radius: 6px;
+        font-weight: 500;
+        font-size: 14px;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.8;
+        }
+      }
     </style>
   </head>
   <body>
@@ -570,8 +640,8 @@
             <div class="step-content">
               <h4>Set Your OpenAI API Key</h4>
               <p>
-                Enter your OpenAI API key in the configuration section to enable
-                transcription and AI responses.
+                Enter your OpenAI API key in the API Configuration section. Your
+                key is never stored and only used locally.
               </p>
             </div>
           </div>
@@ -579,10 +649,11 @@
           <div class="guide-step">
             <div class="step-number">2</div>
             <div class="step-content">
-              <h4>Add Context (Optional)</h4>
+              <h4>Choose Your AI Personality</h4>
               <p>
-                Provide additional context or upload files (PDF, TXT, DOCX) to
-                help the AI give more relevant responses.
+                Select a system prompt from the dropdown (Code Reviewer, Content
+                Writer, Educator, Job Interview Candidate, etc.) or create a
+                custom one. The AI will behave according to the selected prompt.
               </p>
             </div>
           </div>
@@ -590,10 +661,10 @@
           <div class="guide-step">
             <div class="step-number">3</div>
             <div class="step-content">
-              <h4>Start AI Stream</h4>
+              <h4>Add Context (Optional)</h4>
               <p>
-                Click "Start AI Stream" to enable system audio capture. You'll
-                need to select your screen/audio source.
+                Upload your CV/Resume (PDF, TXT, DOCX) or add text context. This
+                helps the AI provide more relevant, personalized responses.
               </p>
             </div>
           </div>
@@ -601,10 +672,22 @@
           <div class="guide-step">
             <div class="step-number">4</div>
             <div class="step-content">
-              <h4>Record with Spacebar</h4>
+              <h4>Select Model & Start</h4>
               <p>
-                Hold SPACEBAR to record audio, release to stop and automatically
-                transcribe + get AI response.
+                Choose your AI model (GPT-3.5 for speed, GPT-4 for quality),
+                then click "Start AI Stream" to enable system audio capture.
+              </p>
+            </div>
+          </div>
+
+          <div class="guide-step">
+            <div class="step-number">5</div>
+            <div class="step-content">
+              <h4>Record & Chat</h4>
+              <p>
+                Hold SPACEBAR or click Record button to capture audio.
+                Release/click Stop to transcribe and get an instant AI response.
+                Perfect for job interview practice with your CV!
               </p>
             </div>
           </div>
@@ -656,13 +739,114 @@
           <div id="apiKeyStatus" class="status"></div>
         </div>
 
+        <!-- Model Selection Section -->
+        <div class="section">
+          <div class="section-title">🧠 AI Model Selection</div>
+          <div class="model-selector">
+            <div style="flex: 1; min-width: 300px">
+              <label
+                for="modelSelect"
+                style="display: block; margin-bottom: 8px; font-weight: 500"
+                >Choose AI Model:</label
+              >
+              <select id="modelSelect">
+                <option value="gpt-3.5-turbo">
+                  GPT-3.5 Turbo (Fast & Budget-friendly) - ~$0.0005/1K tokens
+                </option>
+                <option value="gpt-4-turbo">
+                  GPT-4 Turbo (Fast & Powerful) - ~$0.01/1K tokens
+                </option>
+                <option value="gpt-4">
+                  GPT-4 (Most Advanced) - ~$0.03/1K tokens
+                </option>
+              </select>
+            </div>
+            <div id="modelInfo" class="model-info">
+              <div class="model-description">
+                Quick responses, great for most tasks
+              </div>
+              <div class="model-cost">Budget-friendly</div>
+            </div>
+          </div>
+          <div id="readyStatus" class="status" style="margin-top: 15px"></div>
+        </div>
+
         <div class="grid">
           <!-- Context Management Section -->
           <div class="section">
             <div class="section-title">📄 Context Management</div>
             <div class="context-controls">
-              <!-- Text Context Input -->
+              <!-- System Prompt Selector -->
               <div class="context-group">
+                <label
+                  for="systemPromptSelect"
+                  style="display: block; margin-bottom: 8px; font-weight: 500"
+                  >🎯 System Prompt (AI Behavior):</label
+                >
+                <select
+                  id="systemPromptSelect"
+                  style="
+                    width: 100%;
+                    padding: 10px;
+                    border: 2px solid #e9ecef;
+                    border-radius: 8px;
+                    font-family: inherit;
+                    margin-bottom: 10px;
+                    font-size: 14px;
+                  "
+                >
+                  <option value="">Select a system prompt...</option>
+                </select>
+                <div
+                  id="systemPromptInfo"
+                  style="
+                    margin-bottom: 10px;
+                    padding: 8px;
+                    background: #f0f7ff;
+                    border-left: 3px solid #0066cc;
+                    border-radius: 4px;
+                    font-size: 0.9em;
+                    color: #0066cc;
+                  "
+                ></div>
+                <label
+                  for="systemPromptInput"
+                  style="display: block; margin-bottom: 8px; font-weight: 500"
+                  >Custom System Prompt:</label
+                >
+                <textarea
+                  id="systemPromptInput"
+                  placeholder="Write a custom system prompt or select one from above..."
+                  style="
+                    width: 100%;
+                    min-height: 80px;
+                    padding: 12px;
+                    border: 2px solid #e9ecef;
+                    border-radius: 8px;
+                    font-family: inherit;
+                    resize: vertical;
+                  "
+                ></textarea>
+                <div class="input-group" style="margin-top: 10px">
+                  <button
+                    id="saveSystemPromptButton"
+                    type="button"
+                    class="btn btn-primary"
+                  >
+                    💾 Save System Prompt
+                  </button>
+                  <button
+                    id="clearSystemPromptButton"
+                    type="button"
+                    class="btn btn-secondary"
+                  >
+                    🔄 Reset to Default
+                  </button>
+                </div>
+              </div>
+
+              <!-- Text Context Input -->
+              <div class="context-group" style="margin-top: 20px">
                 <label
                   for="contextInput"
                   style="display: block; margin-bottom: 8px; font-weight: 500"
@@ -774,6 +958,26 @@
               disabled
             >
               ⏸️ Stop AI Stream
+            </button>
+            <button
+              id="recordButton"
+              title="Start Recording (or hold SPACEBAR)"
+              type="button"
+              class="btn btn-primary"
+              disabled
+              style="display: none"
+            >
+              🎙️ Start Recording
+            </button>
+            <button
+              id="stopRecordButton"
+              title="Stop Recording"
+              type="button"
+              class="btn btn-danger"
+              disabled
+              style="display: none"
+            >
+              ⏹️ Stop Recording
             </button>
           </div>
           <div id="streamingStatus" class="status"></div>

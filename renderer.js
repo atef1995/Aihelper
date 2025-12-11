@@ -1,6 +1,8 @@
 // renderer.js - Clean version
 const streamButton = document.getElementById('streamButton');
 const stopStreamButton = document.getElementById('stopStreamButton');
+const recordButton = document.getElementById('recordButton');
+const stopRecordButton = document.getElementById('stopRecordButton');
 const openaiResponse = document.getElementById('openaiResponse');
 const streamingStatus = document.getElementById('streamingStatus');
 const apiKeyInput = document.getElementById('apiKeyInput');
@@ -21,7 +23,157 @@ const helpBtn = document.getElementById('helpBtn');
 const gotItBtn = document.getElementById('gotItBtn');
 const closeGuideBtn = document.getElementById('closeGuideBtn');
 
-let isStreaming = false;
+// Model selection elements
+const modelSelect = document.getElementById('modelSelect');
+const modelInfo = document.getElementById('modelInfo');
+const readyStatus = document.getElementById('readyStatus');
+
+// System prompt elements
+const systemPromptSelect = document.getElementById('systemPromptSelect');
+const systemPromptInput = document.getElementById('systemPromptInput');
+const systemPromptInfo = document.getElementById('systemPromptInfo');
+const saveSystemPromptButton = document.getElementById('saveSystemPromptButton');
+const clearSystemPromptButton = document.getElementById('clearSystemPromptButton');
+let apiKeyConfigured = false;
+let modelSelected = 'gpt-3.5-turbo';
+let currentRecorder = null;
+let isRecording = false;
+let isResponseStreaming = false;
+let currentStreamElement = null;
+let systemPrompt = 'You are a helpful AI assistant. Provide clear, concise, and accurate responses. Help the user with their questions and tasks.';
+
+// Model information mapping
+const modelDescriptions = {
+  'gpt-4': {
+    description: 'Most capable model - best for complex tasks',
+    category: 'Advanced',
+    cost: '~$0.03/1K tokens'
+  },
+  'gpt-4-turbo': {
+    description: 'Faster than GPT-4 with nearly same capability',
+    category: 'Advanced',
+    cost: '~$0.01/1K tokens'
+  },
+  'gpt-3.5-turbo': {
+    description: 'Quick responses, great for most tasks',
+    category: 'Budget-friendly',
+    cost: '~$0.0005/1K tokens'
+  }
+};
+
+// System Prompt Examples
+const systemPrompts = [
+  {
+    id: 'helper',
+    title: 'Helpful Assistant',
+    description: 'A general-purpose helpful assistant that provides clear and concise answers',
+    content: 'You are a helpful AI assistant. Provide clear, concise, and accurate responses. Help the user with their questions and tasks.'
+  },
+  {
+    id: 'coder',
+    title: 'Code Reviewer & Developer',
+    description: 'Specializes in code review, debugging, and software development advice',
+    content: 'You are an expert software developer and code reviewer. Provide detailed code analysis, identify bugs, suggest improvements, and follow best practices. Include code examples when helpful. Focus on clarity, performance, and maintainability.'
+  },
+  {
+    id: 'writer',
+    title: 'Content Writer & Editor',
+    description: 'Helps with writing, editing, and content creation tasks',
+    content: 'You are a professional content writer and editor. Help with writing, editing, proofreading, and improving content quality. Maintain a clear, engaging tone. Consider grammar, style, clarity, and audience. Provide constructive feedback.'
+  },
+  {
+    id: 'educator',
+    title: 'Educator & Tutor',
+    description: 'Teaches concepts clearly and helps with learning and understanding',
+    content: 'You are a patient and knowledgeable educator. Explain concepts clearly and in simple terms. Provide examples, break down complex ideas, ask clarifying questions, and adapt your teaching style. Encourage learning and curiosity.'
+  },
+  {
+    id: 'analyst',
+    title: 'Data Analyst & Researcher',
+    description: 'Analyzes data and provides research insights',
+    content: 'You are a skilled data analyst and researcher. Analyze information thoroughly, identify patterns, draw evidence-based conclusions, and explain findings clearly. Ask clarifying questions about data sources and context. Be objective and highlight limitations.'
+  },
+  {
+    id: 'creative',
+    title: 'Creative Brainstormer',
+    description: 'Generates creative ideas and helps with brainstorming',
+    content: 'You are a creative and imaginative assistant. Help generate ideas, brainstorm solutions, think outside the box, and explore possibilities. Encourage creativity while remaining practical. Build on ideas and suggest variations.'
+  },
+  {
+    id: 'professional',
+    title: 'Professional Business Advisor',
+    description: 'Provides business, career, and professional guidance',
+    content: 'You are a professional business advisor with expertise in strategy, management, and career development. Provide practical advice grounded in business best practices. Consider industry standards and professional norms. Be concise and action-oriented.'
+  },
+  {
+    id: 'interview',
+    title: 'Job Interview Candidate',
+    description: 'Acts as the interviewee and answers questions based on your CV',
+    content: 'You are a job interview candidate being interviewed. Based on the CV or resume provided in the context, answer interview questions authentically and professionally as if you are the person described in the document. Draw from the information in your CV (education, experience, skills, projects) to provide specific, detailed answers. Be honest, confident, and personable. If asked about something not in your CV, acknowledge the gap professionally. Maintain a conversational tone appropriate for an interview setting.'
+  }
+];
+
+// Setup streaming event listeners
+window.electronAPI.onChatStreamChunk(({ chunk, isError }) => {
+  if (isError) {
+    console.error('Stream chunk error:', chunk);
+    return;
+  }
+
+  if (!currentStreamElement) {
+    // Create new response element on first chunk
+    if (openaiResponse.innerHTML.includes('Start streaming to begin')) {
+      openaiResponse.innerHTML = '';
+    }
+
+    const responseDiv = document.createElement('div');
+    responseDiv.className = 'conversation-item ai';
+    responseDiv.innerHTML = '<div class="conversation-label"></div>';
+    openaiResponse.appendChild(responseDiv);
+    currentStreamElement = responseDiv;
+  }
+
+  // Append chunk to current response
+  currentStreamElement.textContent += chunk;
+  openaiResponse.scrollTop = openaiResponse.scrollHeight;
+});
+
+window.electronAPI.onChatStreamComplete(({ success, fullResponse }) => {
+  if (success) {
+    isResponseStreaming = false;
+    streamingStatus.textContent = '🎤 READY - Press SPACEBAR or click Record to continue!';
+    streamingStatus.className = 'status success';
+    currentStreamElement = null;
+  }
+});
+
+window.electronAPI.onChatStreamError(({ error, category }) => {
+  isResponseStreaming = false;
+  const errorMsg = error || 'Chat error';
+  log('Stream error: ' + errorMsg);
+
+  streamingStatus.textContent = `❌ ${errorMsg}`;
+  streamingStatus.className = 'status error';
+
+  // Add error message to chat history
+  if (!currentStreamElement) {
+    if (openaiResponse.innerHTML.includes('Start streaming to begin')) {
+      openaiResponse.innerHTML = '';
+    }
+
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'conversation-item error';
+    errorDiv.innerHTML = `
+      <div class="conversation-label">⚠️ Error</div>
+      <strong>${category || 'API Error'}</strong><br>${errorMsg}
+      <br><small>💡 ${getCategoryHint(category)}</small>
+    `;
+    openaiResponse.appendChild(errorDiv);
+    openaiResponse.scrollTop = openaiResponse.scrollHeight;
+  }
+
+  currentStreamElement = null;
+});
 
 // Event Listeners
 streamButton.addEventListener('click', () => {
@@ -41,17 +193,38 @@ setApiKeyButton.addEventListener('click', async () => {
     return;
   }
 
+  // Show processing status
+  apiKeyStatus.textContent = '🔄 Validating API key...';
+  apiKeyStatus.className = 'status info';
+  setApiKeyButton.disabled = true;
+
   try {
     const result = await window.electronAPI.setApiKey(apiKey);
     if (result.success) {
-      apiKeyStatus.textContent = '✅ API key set successfully!';
+      apiKeyStatus.textContent = result.validated ? '✅ API key validated and set successfully!' : '✅ API key set successfully!';
       apiKeyStatus.className = 'status success';
       apiKeyInput.value = '';
       updateStreamButtonState();
+      checkReadyStatus();
+      log('API key configured successfully');
+    } else {
+      // Display detailed error message
+      const errorMsg = result.error || 'Failed to set API key';
+      const userAction = result.userAction ? `\n${result.userAction}` : '';
+      const details = result.details ? `\n\nDetails: ${result.details}` : '';
+
+      apiKeyStatus.innerHTML = `${errorMsg}${userAction}${details}`;
+      apiKeyStatus.className = 'status error';
+
+      // Keep the input filled so user can edit it
+      log(`API key validation failed: ${result.errorType || 'unknown error'}`);
     }
   } catch (error) {
     apiKeyStatus.textContent = '❌ Error setting API key: ' + error.message;
     apiKeyStatus.className = 'status error';
+    log('API key error: ' + error.message);
+  } finally {
+    setApiKeyButton.disabled = false;
   }
 });
 
@@ -62,11 +235,14 @@ async function checkApiKeyStatus() {
     if (status.hasApiKey) {
       apiKeyStatus.textContent = '✅ API key is configured';
       apiKeyStatus.className = 'status success';
+      apiKeyConfigured = true;
     } else {
       apiKeyStatus.textContent = '⚠️ No API key configured';
       apiKeyStatus.className = 'status warning';
+      apiKeyConfigured = false;
     }
     updateStreamButtonState();
+    checkReadyStatus();
   } catch (error) {
     apiKeyStatus.textContent = '❌ Error checking API key status';
     apiKeyStatus.className = 'status error';
@@ -76,10 +252,143 @@ async function checkApiKeyStatus() {
 function updateStreamButtonState() {
   window.electronAPI.getApiKeyStatus().then(status => {
     streamButton.disabled = !status.hasApiKey;
+    apiKeyConfigured = status.hasApiKey;
+    checkReadyStatus();
   });
 }
 
-// SIMPLE Push-to-Record streaming function
+// Model Selection Management
+async function loadModelPreferences() {
+  try {
+    const result = await window.electronAPI.getSelectedModel();
+    if (result.success) {
+      modelSelected = result.model;
+      modelSelect.value = modelSelected;
+      updateModelInfo(modelSelected);
+    }
+  } catch (error) {
+    log('Error loading model preference: ' + error.message);
+  }
+}
+
+function updateModelInfo(model) {
+  const info = modelDescriptions[model];
+  if (info && modelInfo) {
+    modelInfo.innerHTML = `
+      <div class="model-description">${info.description}</div>
+      <div class="model-cost">${info.category} - ${info.cost}</div>
+    `;
+  }
+}
+
+async function handleModelChange(event) {
+  const newModel = event.target.value;
+  try {
+    const result = await window.electronAPI.setSelectedModel(newModel);
+    if (result.success) {
+      modelSelected = newModel;
+      updateModelInfo(newModel);
+      log(`Model changed to: ${newModel}`);
+      checkReadyStatus();
+    }
+  } catch (error) {
+    log('Error setting model: ' + error.message);
+    modelSelect.value = modelSelected; // Revert selection
+  }
+}
+
+function checkReadyStatus() {
+  if (apiKeyConfigured && modelSelected) {
+    if (readyStatus) {
+      readyStatus.innerHTML = '✅ Everything is ready! Press "Start AI Stream" to begin.';
+      readyStatus.className = 'status success';
+      readyStatus.style.display = 'block';
+    }
+  } else {
+    if (readyStatus) {
+      readyStatus.style.display = 'none';
+    }
+  }
+}
+
+// Add model selection event listener
+if (modelSelect) {
+  modelSelect.addEventListener('change', handleModelChange);
+}
+
+// System Prompt Management
+function initializeSystemPrompts() {
+  // Populate dropdown with system prompt options
+  if (systemPromptSelect) {
+    systemPrompts.forEach(prompt => {
+      const option = document.createElement('option');
+      option.value = prompt.id;
+      option.textContent = prompt.title;
+      systemPromptSelect.appendChild(option);
+    });
+  }
+}
+
+function handleSystemPromptSelect(event) {
+  const promptId = event.target.value;
+  const selectedPrompt = systemPrompts.find(p => p.id === promptId);
+
+  if (selectedPrompt) {
+    systemPrompt = selectedPrompt.content;
+    systemPromptInput.value = selectedPrompt.content;
+    systemPromptInfo.innerHTML = `📋 ${selectedPrompt.description}`;
+    contextStatus.textContent = `✅ System prompt applied: ${selectedPrompt.title}`;
+    contextStatus.className = 'status success';
+    log(`Applied system prompt: ${selectedPrompt.title}`);
+  }
+}
+
+function applyCustomSystemPrompt() {
+  const customPrompt = systemPromptInput.value.trim();
+
+  if (!customPrompt) {
+    contextStatus.textContent = '⚠️ Please enter a system prompt';
+    contextStatus.className = 'status warning';
+    return;
+  }
+
+  systemPrompt = customPrompt;
+  systemPromptSelect.value = ''; // Clear dropdown since using custom
+  systemPromptInfo.innerHTML = '📋 Custom system prompt';
+  contextStatus.textContent = '✅ Custom system prompt applied!';
+  contextStatus.className = 'status success';
+  log('Applied custom system prompt: ' + customPrompt.substring(0, 50) + '...');
+}
+
+function resetSystemPrompt() {
+  const defaultPrompt = systemPrompts[0]; // Helpful Assistant is default
+  systemPrompt = defaultPrompt.content;
+  systemPromptInput.value = defaultPrompt.content;
+  systemPromptSelect.value = '';
+  systemPromptInfo.innerHTML = `📋 ${defaultPrompt.description}`;
+  contextStatus.textContent = '✅ System prompt reset to default!';
+  contextStatus.className = 'status success';
+  log('System prompt reset to default');
+}
+
+// Add system prompt event listeners
+if (systemPromptSelect) {
+  systemPromptSelect.addEventListener('change', handleSystemPromptSelect);
+}
+
+if (systemPromptInput) {
+  systemPromptInput.addEventListener('change', applyCustomSystemPrompt);
+  systemPromptInput.addEventListener('blur', applyCustomSystemPrompt);
+}
+
+if (saveSystemPromptButton) {
+  saveSystemPromptButton.addEventListener('click', applyCustomSystemPrompt);
+}
+
+if (clearSystemPromptButton) {
+  clearSystemPromptButton.addEventListener('click', resetSystemPrompt);
+}
+
 async function startRealTimeStream() {
   try {
     // Only use system audio (screen capture)
@@ -109,17 +418,22 @@ async function startRealTimeStream() {
     streamingStatus.textContent = '🎤 READY - Press SPACEBAR to record and transcribe!';
     streamingStatus.className = 'status success';
 
-    // Simple approach: Record when spacebar is pressed
-    let currentRecorder = null;
-    let isRecording = false;
+    // Show record buttons
+    recordButton.disabled = false;
+    recordButton.style.display = 'inline-flex';
+    stopRecordButton.disabled = true;
+    stopRecordButton.style.display = 'inline-flex';
 
-    const startRecording = () => {
+    // Define recording functions
+    const startRecording = async () => {
       if (isRecording || !isStreaming) return;
 
       isRecording = true;
       log('Starting recording...');
-      streamingStatus.textContent = '🔴 RECORDING - Release SPACEBAR to transcribe...';
+      streamingStatus.textContent = '🔴 RECORDING - Release SPACEBAR or click Stop to transcribe...';
       streamingStatus.className = 'status error';
+      recordButton.disabled = true;
+      stopRecordButton.disabled = false;
 
       // Use simple WAV format - most reliable
       let options = {};
@@ -139,6 +453,10 @@ async function startRealTimeStream() {
       };
 
       currentRecorder.onstop = async () => {
+        isRecording = false;
+        recordButton.disabled = false;
+        stopRecordButton.disabled = true;
+
         if (recordedChunks.length > 0) {
           streamingStatus.textContent = '🔄 Processing with OpenAI...';
           streamingStatus.className = 'status info';
@@ -155,32 +473,26 @@ async function startRealTimeStream() {
             if (transcriptionResult.success && transcriptionResult.text.trim()) {
               log(`Transcribed: "${transcriptionResult.text}"`);
 
-              const chatResult = await window.electronAPI.chatCompletion(transcriptionResult.text);
-
-              if (chatResult.success) {
-                if (openaiResponse.innerHTML.includes('Start streaming to begin')) {
-                  openaiResponse.innerHTML = '';
-                }
-
-                openaiResponse.innerHTML += `
-                  <div class="conversation-item user">
-                    <div class="conversation-label">👤 System Audio</div>
-                    ${transcriptionResult.text}
-                  </div>
-                  <div class="conversation-item ai">
-                    <div class="conversation-label">🤖 AI Assistant</div>
-                    ${chatResult.response}
-                  </div>
-                `;
-                openaiResponse.scrollTop = openaiResponse.scrollHeight;
-
-                streamingStatus.textContent = '🎤 READY - Press SPACEBAR to record again!';
-                streamingStatus.className = 'status success';
-              } else {
-                log('Chat error: ' + chatResult.error);
-                streamingStatus.textContent = '❌ Chat error - Press SPACEBAR to try again';
-                streamingStatus.className = 'status warning';
+              // Add user message to chat history
+              if (openaiResponse.innerHTML.includes('Start streaming to begin')) {
+                openaiResponse.innerHTML = '';
               }
+
+              const userMessageDiv = document.createElement('div');
+              userMessageDiv.className = 'conversation-item user';
+              userMessageDiv.innerHTML = `
+                <div class="conversation-label">System Audio</div>
+                ${transcriptionResult.text}
+              `;
+              openaiResponse.appendChild(userMessageDiv);
+
+              // Start streaming response
+              isResponseStreaming = true;
+              streamingStatus.textContent = '🔄 Streaming response...';
+              streamingStatus.className = 'status info';
+
+              // Call streaming version - event listeners will handle the response
+              window.electronAPI.chatCompletionStream(transcriptionResult.text, modelSelected, systemPrompt);
             } else {
               log('Transcription failed: ' + (transcriptionResult.error || 'No text'));
               streamingStatus.textContent = '❌ Transcription failed - Press SPACEBAR to try again';
@@ -222,13 +534,21 @@ async function startRealTimeStream() {
       }
     };
 
+    // Button event listeners
+    const recordButtonHandler = () => startRecording();
+    const stopRecordButtonHandler = () => stopRecording();
+
     document.addEventListener('keydown', keydownHandler);
     document.addEventListener('keyup', keyupHandler);
+    recordButton.addEventListener('click', recordButtonHandler);
+    stopRecordButton.addEventListener('click', stopRecordButtonHandler);
 
     // Store cleanup function
     window.cleanupKeyboardListeners = () => {
       document.removeEventListener('keydown', keydownHandler);
       document.removeEventListener('keyup', keyupHandler);
+      recordButton.removeEventListener('click', recordButtonHandler);
+      stopRecordButton.removeEventListener('click', stopRecordButtonHandler);
     };
 
     log('Simple push-to-record streaming ready!');
@@ -244,11 +564,21 @@ async function startRealTimeStream() {
 function stopRealTimeStream() {
   isStreaming = false;
 
-  // Clean up keyboard listeners
+  // Clean up keyboard listeners and button handlers
   if (window.cleanupKeyboardListeners) {
     window.cleanupKeyboardListeners();
     window.cleanupKeyboardListeners = null;
   }
+
+  // Hide record buttons
+  recordButton.style.display = 'none';
+  stopRecordButton.style.display = 'none';
+  recordButton.disabled = true;
+  stopRecordButton.disabled = true;
+
+  // Reset recording state
+  isRecording = false;
+  currentRecorder = null;
 
   resetStreamButtons();
   streamingStatus.textContent = '⏸️ Streaming stopped';
@@ -264,6 +594,20 @@ function resetStreamButtons() {
 
 function log(msg) {
   console.log(msg); // Use console.log instead since there's no log element in the UI
+}
+
+function getCategoryHint(category) {
+  const hints = {
+    'invalid_api_key': 'Check your API key is correct and starts with "sk-"',
+    'expired_api_key': 'Your API key may have expired - try generating a new one in OpenAI dashboard',
+    'rate_limit': 'You\'ve hit the API rate limit - wait a moment and try again',
+    'insufficient_funds': 'Add credits or set up billing in your OpenAI account',
+    'model_not_found': 'This model is not available with your API key - check your account access',
+    'insufficient_quota': 'You\'ve exceeded your quota - upgrade your plan or wait for reset',
+    'server_error': 'OpenAI servers are having issues - try again in a moment',
+    'network_error': 'Check your internet connection and try again'
+  };
+  return hints[category] || 'Please check your API key and try again';
 }
 
 // Context Management Event Listeners
@@ -505,6 +849,8 @@ function closeGuide() {
 // Initialize the app
 
 checkApiKeyStatus();
+loadModelPreferences();
+initializeSystemPrompts();
 loadExistingContext();
 checkFirstTime();
 

@@ -28,7 +28,7 @@ app.whenReady().then(() => {
   } catch (error) {
     console.error('Failed to initialize temp directories:', error);
   }
-  
+
   createWindow()
   session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
     desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
@@ -55,11 +55,117 @@ let apiKey = process.env.OPENAI_API_KEY || null;
 let userContext = '';
 let uploadedFilesContent = new Map(); // Store file content by filename
 
+// Model configuration
+const AVAILABLE_MODELS = {
+  'gpt-4': {
+    name: 'GPT-4 (Most Advanced)',
+    description: 'Most capable model - best for complex tasks',
+    cost: '~$0.03/1K tokens',
+    category: 'Advanced'
+  },
+  'gpt-4-turbo': {
+    name: 'GPT-4 Turbo (Fast & Powerful)',
+    description: 'Faster than GPT-4 with nearly same capability',
+    cost: '~$0.01/1K tokens',
+    category: 'Advanced'
+  },
+  'gpt-3.5-turbo': {
+    name: 'GPT-3.5 Turbo (Fast & Budget-friendly)',
+    description: 'Quick responses, great for most tasks',
+    cost: '~$0.0005/1K tokens',
+    category: 'Budget-friendly'
+  }
+};
+
+let selectedModel = 'gpt-3.5-turbo'; // Default model
+
+// Error categorization and user-friendly messages
+function categorizeApiError(error) {
+  const errorMessage = error.message || error.toString();
+  const errorType = error.type || error.error?.type || '';
+  const statusCode = error.status || 0;
+
+  console.error('Raw API Error:', { errorMessage, errorType, statusCode, fullError: error });
+
+  // Check for specific error codes and patterns
+  if (errorType === 'insufficient_quota' || errorMessage.includes('insufficient_quota')) {
+    return {
+      errorType: 'insufficient_quota',
+      friendlyMessage: '💳 Insufficient Credits: Your OpenAI account has run out of credits.',
+      detailedMessage: 'Please add funds to your OpenAI account at https://platform.openai.com/account/billing/overview',
+      userAction: 'Add funds and try again'
+    };
+  }
+
+  if (errorType === 'rate_limit_exceeded' || statusCode === 429 || errorMessage.includes('rate_limit')) {
+    return {
+      errorType: 'rate_limit',
+      friendlyMessage: '⏱️ Rate Limited: Too many requests sent in a short time.',
+      detailedMessage: 'Please wait a moment before trying again. Consider spacing out your requests.',
+      userAction: 'Wait 30 seconds and try again'
+    };
+  }
+
+  if (errorType === 'invalid_request_error' || statusCode === 400) {
+    if (errorMessage.includes('model') || errorMessage.includes('does not exist')) {
+      return {
+        errorType: 'model_not_found',
+        friendlyMessage: `⚠️ Model Not Available: The selected model (${selectedModel}) is not available with your API key.`,
+        detailedMessage: 'This model might require a different subscription plan or may not be available in your region.',
+        userAction: 'Try a different model (e.g., gpt-3.5-turbo)'
+      };
+    }
+    return {
+      errorType: 'invalid_request',
+      friendlyMessage: '❌ Invalid Request: The request was malformed.',
+      detailedMessage: `Error: ${errorMessage}`,
+      userAction: 'Check your input and try again'
+    };
+  }
+
+  if (errorType === 'authentication_error' || statusCode === 401) {
+    return {
+      errorType: 'auth_error',
+      friendlyMessage: '🔑 Authentication Failed: Your API key is invalid or expired.',
+      detailedMessage: 'Please check your OpenAI API key and make sure it\'s correct.',
+      userAction: 'Update your API key'
+    };
+  }
+
+  if (statusCode === 503 || errorMessage.includes('service') || errorMessage.includes('overloaded')) {
+    return {
+      errorType: 'service_unavailable',
+      friendlyMessage: '🔧 OpenAI Service Unavailable: The service is temporarily down.',
+      detailedMessage: 'The OpenAI API is experiencing issues. Please try again in a few moments.',
+      userAction: 'Try again later'
+    };
+  }
+
+  // Check for invalid/incorrect API key messages
+  if (errorMessage.includes('Incorrect API key') || errorMessage.includes('invalid_api_key') ||
+    errorMessage.includes('api key') && errorMessage.includes('invalid')) {
+    return {
+      errorType: 'invalid_api_key',
+      friendlyMessage: '🔑 Invalid API Key: The API key provided is incorrect.',
+      detailedMessage: 'Your API key may have been revoked, expired, or is malformed.',
+      userAction: 'Generate a new API key at https://platform.openai.com/api-keys'
+    };
+  }
+
+  // Generic error
+  return {
+    errorType: 'unknown',
+    friendlyMessage: '❌ Error: Something went wrong processing your request.',
+    detailedMessage: `Error details: ${errorMessage}`,
+    userAction: 'Try again or check your API key'
+  };
+}
+
 // Helper function to get proper temp directories using Electron best practices
 function getTempDirectories() {
   const userDataPath = app.getPath('userData');
   const tempPath = app.getPath('temp');
-  
+
   return {
     // Use app's userData directory for file uploads (persistent across sessions)
     uploadsDir: path.join(userDataPath, 'temp-uploads'),
@@ -71,13 +177,13 @@ function getTempDirectories() {
 // Ensure temp directories exist
 function ensureTempDirectories() {
   const { uploadsDir, audioDir } = getTempDirectories();
-  
+
   try {
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
       console.log(`Created uploads directory: ${uploadsDir}`);
     }
-    
+
     if (!fs.existsSync(audioDir)) {
       fs.mkdirSync(audioDir, { recursive: true });
       console.log(`Created audio directory: ${audioDir}`);
@@ -100,13 +206,112 @@ ipcMain.on("start-recording", () => {
 
 // Handle API key management
 ipcMain.handle('set-api-key', async (event, newApiKey) => {
-  apiKey = newApiKey;
+  // Validate API key format
+  if (!newApiKey || typeof newApiKey !== 'string') {
+    return {
+      success: false,
+      error: '❌ Invalid Input: API key cannot be empty.',
+      errorType: 'invalid_input',
+      userAction: 'Please enter a valid API key'
+    };
+  }
+
+  const trimmedKey = newApiKey.trim();
+
+  // Check basic format (OpenAI keys start with 'sk-' and are typically 48+ characters)
+  if (!trimmedKey.startsWith('sk-')) {
+    return {
+      success: false,
+      error: '⚠️ Invalid API Key Format: OpenAI API keys start with "sk-".',
+      errorType: 'invalid_format',
+      userAction: 'Check your API key from https://platform.openai.com/api-keys'
+    };
+  }
+
+  if (trimmedKey.length < 20) {
+    return {
+      success: false,
+      error: '⚠️ Invalid API Key Length: The key appears to be too short.',
+      errorType: 'invalid_format',
+      userAction: 'Verify your complete API key is copied correctly'
+    };
+  }
+
+  // Set the API key and initialize OpenAI
+  apiKey = trimmedKey;
   initializeOpenAI();
-  return { success: true, message: 'API key set successfully' };
+
+  // Verify the API key works by making a test request
+  try {
+    console.log('Testing API key validity...');
+    if (openai) {
+      // Make a minimal test call to verify the key works
+      await openai.models.list();
+      console.log('API key validation successful');
+      return {
+        success: true,
+        message: 'API key set and validated successfully!',
+        validated: true
+      };
+    }
+  } catch (error) {
+    console.error('API key validation error:', error);
+
+    const errorInfo = categorizeApiError(error);
+
+    // Check specifically for auth errors
+    if (error.status === 401 || errorInfo.errorType === 'auth_error') {
+      apiKey = null; // Clear the invalid key
+      initializeOpenAI();
+      return {
+        success: false,
+        error: '🔑 Invalid API Key: The key is rejected by OpenAI.',
+        errorType: 'invalid_api_key',
+        userAction: 'Double-check your API key or generate a new one at https://platform.openai.com/api-keys',
+        details: 'The key format looks correct, but OpenAI rejected it as invalid or expired.'
+      };
+    }
+
+    if (error.status === 429) {
+      return {
+        success: false,
+        error: '⏱️ Rate Limited: Too many verification attempts.',
+        errorType: 'rate_limit',
+        userAction: 'Wait a moment and try again',
+        validated: false
+      };
+    }
+
+    // Generic error
+    return {
+      success: false,
+      error: `❌ Validation Error: ${errorInfo.friendlyMessage}`,
+      errorType: 'validation_error',
+      userAction: 'Try again or verify your API key',
+      validated: false
+    };
+  }
 });
 
 ipcMain.handle('get-api-key-status', async () => {
   return { hasApiKey: !!apiKey };
+});
+
+// Model management handlers
+ipcMain.handle('get-available-models', async () => {
+  return { success: true, models: AVAILABLE_MODELS };
+});
+
+ipcMain.handle('set-selected-model', async (event, model) => {
+  if (AVAILABLE_MODELS[model]) {
+    selectedModel = model;
+    return { success: true, message: `Model set to ${AVAILABLE_MODELS[model].name}` };
+  }
+  return { success: false, error: 'Invalid model selected' };
+});
+
+ipcMain.handle('get-selected-model', async () => {
+  return { success: true, model: selectedModel, info: AVAILABLE_MODELS[selectedModel] };
 });
 
 // Handle real-time audio transcription
@@ -203,11 +408,36 @@ ipcMain.handle('transcribe-audio', async (event, audioBlob, mimeType) => {
     console.error('Transcription error:', error);
 
     let errorMessage = error.message;
+    let errorType = 'transcription_failed';
+
+    // Categorize transcription-specific errors
     if (error.status === 400) {
-      errorMessage = 'Audio format not supported or corrupted. Trying next audio chunk...';
+      errorType = 'invalid_audio_format';
+      errorMessage = '🎙️ Audio Format Issue: The audio format is not supported or the file is corrupted. Try speaking more clearly or check your audio settings.';
+    } else if (error.status === 413) {
+      errorType = 'audio_too_large';
+      errorMessage = '📁 Audio Too Large: The recording is too large. Please keep recordings under 25MB.';
+    } else if (error.status === 429) {
+      errorType = 'rate_limit';
+      errorMessage = '⏱️ Too Many Requests: The transcription service is temporarily rate limited. Wait a moment and try again.';
+    } else if (error.status === 401 || error.status === 403) {
+      errorType = 'auth_error';
+      errorMessage = '🔑 Authentication Failed: Your API key is invalid or has expired. Please check your OpenAI API key settings.';
+    } else if (error.message.includes('Incorrect API key') || error.message.includes('invalid api key')) {
+      errorType = 'invalid_api_key';
+      errorMessage = '🔑 Invalid API Key: The API key provided is incorrect or has been revoked. Please verify your key at https://platform.openai.com/api-keys';
+    } else if (error.message.includes('empty') || error.message.includes('no audio')) {
+      errorType = 'no_audio_detected';
+      errorMessage = '🔇 No Audio Detected: The recording appears to be silent. Please try speaking more clearly.';
+    } else if (error.message.includes('corrupted')) {
+      errorType = 'corrupted_audio';
+      errorMessage = '⚠️ Corrupted Audio: The audio file appears to be corrupted. Try recording again.';
+    } else if (error.message.includes('quota') || error.message.includes('insufficient_quota')) {
+      errorType = 'insufficient_quota';
+      errorMessage = '💳 Insufficient Credits: Your OpenAI account has run out of credits. Please add funds at https://platform.openai.com/account/billing/overview';
     }
 
-    return { success: false, error: errorMessage };
+    return { success: false, error: errorMessage, errorType };
   } finally {
     // Always clean up temp file, even if there was an error
     if (tempPath && fs.existsSync(tempPath)) {
@@ -277,7 +507,7 @@ async function parseDocxFile(filePath) {
 // Handle file upload and parsing
 ipcMain.handle('upload-file', async (event, fileName, fileBuffer) => {
   let tempPath = null; // Declare tempPath outside try block so it's available in catch
-  
+
   try {
     console.log(`Processing file upload: ${fileName}`);
 
@@ -401,10 +631,18 @@ ipcMain.handle('get-uploaded-files', async () => {
 });
 
 // Enhanced chat completion with context
-ipcMain.handle('chat-completion', async (event, text) => {
+// Regular chat completion (non-streaming)
+ipcMain.handle('chat-completion', async (event, text, model, systemPrompt) => {
   if (!openai) {
-    return { success: false, error: 'OpenAI API key not set. Please configure your API key first.' };
+    return {
+      success: false,
+      error: 'OpenAI API key not set. Please configure your API key first.',
+      errorType: 'no_api_key'
+    };
   }
+
+  // Use provided model or fall back to selected model
+  const modelToUse = model || selectedModel;
 
   try {
     // Build context message
@@ -425,19 +663,137 @@ ipcMain.handle('chat-completion', async (event, text) => {
     // Combine context with user query
     const fullMessage = contextMessage + `User Query: ${text}`;
 
+    console.log(`Using model: ${modelToUse}`);
+
+    // Use system prompt if provided, otherwise use default helpful assistant prompt
+    const systemMessage = systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate responses.';
+
     const completion = await openai.chat.completions.create({
-      messages: [{
-        role: 'user',
-        content: fullMessage
-      }],
-      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: systemMessage
+        },
+        {
+          role: 'user',
+          content: fullMessage
+        }
+      ],
+      model: modelToUse,
       max_tokens: 2000, // Allow longer responses due to context
     });
 
     return { success: true, response: completion.choices[0].message.content };
   } catch (error) {
     console.error('Chat completion error:', error);
-    return { success: false, error: error.message };
+
+    const errorInfo = categorizeApiError(error);
+
+    return {
+      success: false,
+      error: errorInfo.friendlyMessage,
+      errorType: errorInfo.errorType,
+      errorDetails: errorInfo.detailedMessage,
+      userAction: errorInfo.userAction
+    };
+  }
+});
+
+// Streaming chat completion
+ipcMain.handle('chat-completion-stream', async (event, text, model, systemPrompt) => {
+  if (!openai) {
+    return {
+      success: false,
+      error: 'OpenAI API key not set. Please configure your API key first.',
+      errorType: 'no_api_key'
+    };
+  }
+
+  // Use provided model or fall back to selected model
+  const modelToUse = model || selectedModel;
+
+  try {
+    // Build context message
+    let contextMessage = '';
+
+    if (userContext.trim()) {
+      contextMessage += `User Context: ${userContext}\n\n`;
+    }
+
+    // Add file contents to context
+    if (uploadedFilesContent.size > 0) {
+      contextMessage += `Uploaded Files Content:\n`;
+      for (const [fileName, content] of uploadedFilesContent) {
+        contextMessage += `--- ${fileName} ---\n${content}\n\n`;
+      }
+    }
+
+    // Combine context with user query
+    const fullMessage = contextMessage + `User Query: ${text}`;
+
+    console.log(`Using model for streaming: ${modelToUse}`);
+
+    // Use system prompt if provided, otherwise use default helpful assistant prompt
+    const systemMessage = systemPrompt || 'You are a helpful AI assistant. Provide clear, concise, and accurate responses.';
+
+    const stream = await openai.chat.completions.create({
+      messages: [
+        {
+          role: 'system',
+          content: systemMessage
+        },
+        {
+          role: 'user',
+          content: fullMessage
+        }
+      ],
+      model: modelToUse,
+      max_tokens: 2000,
+      stream: true // Enable streaming
+    });
+
+    let fullResponse = '';
+
+    // Process stream chunks
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content || '';
+      if (delta) {
+        fullResponse += delta;
+        // Send chunk to renderer
+        event.sender.send('chat-stream-chunk', {
+          chunk: delta,
+          isError: false
+        });
+      }
+    }
+
+    // Send completion signal
+    event.sender.send('chat-stream-complete', {
+      success: true,
+      fullResponse: fullResponse
+    });
+
+    return { success: true, response: fullResponse };
+  } catch (error) {
+    console.error('Chat completion stream error:', error);
+
+    const errorInfo = categorizeApiError(error);
+
+    // Send error through stream
+    event.sender.send('chat-stream-error', {
+      error: errorInfo.friendlyMessage,
+      errorType: errorInfo.errorType,
+      errorDetails: errorInfo.detailedMessage,
+      userAction: errorInfo.userAction
+    });
+
+    return {
+      success: false,
+      error: errorInfo.friendlyMessage,
+      errorType: errorInfo.errorType,
+      errorDetails: errorInfo.detailedMessage,
+      userAction: errorInfo.userAction
+    };
   }
 });
 
