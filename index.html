@@ -213,195 +213,201 @@
         </div>
       </div>
 
-      <div class="content">
-        <!-- Recording Controls - PROMINENT -->
-        <div class="section recording-section">
-          <div class="section-title">Recording Controls</div>
-          <div class="recording-instructions">
-            <p><strong>Step 1:</strong> Click "Start AI Stream" to enable audio capture</p>
-            <p><strong>Step 2:</strong> Click "Start Recording" or press SPACEBAR to begin</p>
-            <p><strong>Step 3:</strong> Click "Stop Recording" or press SPACEBAR again to finish</p>
-          </div>
-          <div class="control-group">
-            <button
-              id="streamButton"
-              title="Start Real-time Stream to OpenAI"
-              type="button"
-              class="btn btn-success btn-large"
-            >
-              Start AI Stream
-            </button>
-            <button
-              id="stopStreamButton"
-              title="Stop Real-time Stream"
-              type="button"
-              class="btn btn-danger btn-large"
-              disabled
-            >
-              Stop AI Stream
-            </button>
-          </div>
-          <div class="control-group" id="recordControls" style="display: none; margin-top: 15px;">
-            <button
-              id="recordToggleButton"
-              title="Click to start/stop recording or use SPACEBAR"
-              type="button"
-              class="btn btn-record btn-xlarge"
-              data-recording="false"
-            >
-              <span class="record-text">Start Recording</span>
-            </button>
-          </div>
-          <div id="streamingStatus" class="status"></div>
-        </div>
-
-        <!-- AI Conversation Section -->
-        <div class="section">
-          <div class="section-title">AI Conversation</div>
-          <div id="openaiResponse" class="response-area">
-            <div style="text-align: center; color: #6c757d; margin-top: 50px">
-              <p>Start streaming to begin your conversation with AI</p>
-              <p style="margin-top: 10px; font-size: 0.9em">
-                Your audio will be transcribed and processed in real-time
-              </p>
+      <div class="content-grid">
+        <!-- LEFT COLUMN: Controls -->
+        <div class="controls-column">
+          <!-- API Configuration Section - FIRST -->
+          <div class="section">
+            <div class="section-title">API Configuration</div>
+            <div class="input-group">
+              <input
+                type="password"
+                id="apiKeyInput"
+                placeholder="Enter your OpenAI API key (sk-...)"
+              />
+              <button id="setApiKeyButton" type="button" class="btn btn-primary">
+                Update API Key
+              </button>
             </div>
+            <div id="apiKeyStatus" class="status"></div>
           </div>
-        </div>
 
-        <!-- Collapsible Advanced Options -->
-        <details class="section collapsible-section">
-          <summary class="section-title expandable">
-            <span>Advanced Options (Optional)</span>
-            <span class="expand-icon">▼</span>
-          </summary>
-          
-          <div class="collapsible-content">
-            <!-- API Configuration -->
-            <div class="subsection">
-              <h4>API Configuration</h4>
-              <div class="input-group">
-                <input
-                  type="password"
-                  id="apiKeyInput"
-                  placeholder="Enter your OpenAI API key"
-                />
-                <button id="setApiKeyButton" type="button" class="btn btn-primary">
-                  Update API Key
-                </button>
-              </div>
-              <div id="apiKeyStatus" class="status"></div>
+          <!-- Recording Controls - PROMINENT -->
+          <div class="section recording-section">
+            <div class="section-title">Recording Controls</div>
+            <div class="recording-instructions">
+              <p><strong>Step 1:</strong> Click "Start AI Stream" to enable audio capture</p>
+              <p><strong>Manual Mode:</strong> Click "Start Recording" or press SPACEBAR to begin/stop</p>
+              <p><strong>Auto Mode:</strong> Enable "Auto-Answer Mode" to automatically detect and answer questions</p>
             </div>
-
-            <!-- Model Selection -->
-            <div class="subsection">
-              <h4>AI Model Selection</h4>
-              <select id="modelSelect">
-                <option value="gpt-3.5-turbo">
-                  GPT-3.5 Turbo (Fast & Budget-friendly) - ~$0.0005/1K tokens
-                </option>
-                <option value="gpt-4-turbo">
-                  GPT-4 Turbo (Fast & Powerful) - ~$0.01/1K tokens
-                </option>
-                <option value="gpt-4">
-                  GPT-4 (Most Advanced) - ~$0.03/1K tokens
-                </option>
-              </select>
-              <div id="modelInfo" class="model-info">
-                <div class="model-description">
-                  Quick responses, great for most tasks
-                </div>
-                <div class="model-cost">Budget-friendly</div>
-              </div>
+            <div class="control-group">
+              <button
+                id="streamButton"
+                title="Start Real-time Stream to OpenAI"
+                type="button"
+                class="btn btn-success btn-large"
+              >
+                Start AI Stream
+              </button>
+              <button
+                id="stopStreamButton"
+                title="Stop Real-time Stream"
+                type="button"
+                class="btn btn-danger btn-large"
+                disabled
+              >
+                Stop AI Stream
+              </button>
             </div>
+            <div class="control-group" id="recordControls" style="display: none; margin-top: 15px;">
+              <button
+                id="recordToggleButton"
+                title="Click to start/stop recording or use SPACEBAR"
+                type="button"
+                class="btn btn-record btn-xlarge"
+                data-recording="false"
+              >
+                <span class="record-text">Start Recording</span>
+              </button>
+            </div>
+            <div class="control-group" id="autoAnswerControls" style="display: none; margin-top: 15px;">
+              <button
+                id="autoAnswerToggle"
+                title="Enable automatic question detection and answering"
+                type="button"
+                class="btn btn-auto btn-large"
+                data-active="false"
+              >
+                <span class="auto-text">Enable Auto-Answer Mode</span>
+              </button>
+            </div>
+            <div id="streamingStatus" class="status"></div>
+          </div>
 
-            <!-- Context Management -->
-            <div class="subsection">
-              <h4>Context Management</h4>
-              
-              <div class="context-group">
-                <label for="systemPromptSelect">System Prompt (AI Behavior):</label>
-                <select id="systemPromptSelect">
-                  <option value="">Select a system prompt...</option>
+          <!-- Advanced Options in left column -->
+          <details class="section collapsible-section">
+            <summary class="section-title expandable">
+              <span>Advanced Options (Optional)</span>
+              <span class="expand-icon">▼</span>
+            </summary>
+            
+            <div class="collapsible-content">
+              <!-- Model Selection -->
+              <div class="subsection">
+                <h4>AI Model Selection</h4>
+                <select id="modelSelect">
+                  <option value="gpt-3.5-turbo">
+                    GPT-3.5 Turbo (Fast & Budget-friendly) - ~$0.0005/1K tokens
+                  </option>
+                  <option value="gpt-4-turbo">
+                    GPT-4 Turbo (Fast & Powerful) - ~$0.01/1K tokens
+                  </option>
+                  <option value="gpt-4">
+                    GPT-4 (Most Advanced) - ~$0.03/1K tokens
+                  </option>
                 </select>
-                <div id="systemPromptInfo"></div>
+                <div id="modelInfo" class="model-info">
+                  <div class="model-description">
+                    Quick responses, great for most tasks
+                  </div>
+                  <div class="model-cost">Budget-friendly</div>
+                </div>
+              </div>
+
+              <!-- Context Management -->
+              <div class="subsection">
+                <h4>Context Management</h4>
                 
-                <label for="systemPromptInput" class="mt-15">Custom System Prompt:</label>
-                <textarea
-                  id="systemPromptInput"
-                  placeholder="Write a custom system prompt or select one from above..."
-                ></textarea>
-                <div class="input-group mt-10">
-                  <button
-                    id="saveSystemPromptButton"
-                    type="button"
-                    class="btn btn-primary"
-                  >
-                    Save System Prompt
-                  </button>
-                  <button
-                    id="clearSystemPromptButton"
-                    type="button"
-                    class="btn btn-secondary"
-                  >
-                    Reset to Default
-                  </button>
-                </div>
-              </div>
-
-              
-              <div class="context-group mt-20">
-                <label for="contextInput">Additional Context:</label>
-                <textarea
-                  id="contextInput"
-                  placeholder="Add any context that would help the AI provide better responses..."
-                ></textarea>
-                <div class="input-group mt-10">
-                  <button
-                    id="saveContextButton"
-                    type="button"
-                    class="btn btn-primary"
-                  >
-                    Save Context
-                  </button>
-                  <button
-                    id="clearContextButton"
-                    type="button"
-                    class="btn btn-secondary"
-                  >
-                    Clear Context
-                  </button>
-                </div>
-              </div>
-
-              
-              <div class="context-group mt-20">
-                <label for="fileInput">Upload Files (PDF, TXT, DOCX):</label>
-                <div class="file-upload-area">
-                  <input
-                    type="file"
-                    id="fileInput"
-                    multiple
-                    accept=".pdf,.txt,.docx"
-                    class="hidden"
-                  />
-                  <div id="fileDropZone" class="file-drop-zone">
-                    <div class="drop-zone-content">
-                      <p>Click to select files or drag & drop here</p>
-                      <p class="drop-zone-hint">
-                        Supported: PDF, TXT, DOCX
-                      </p>
-                    </div>
+                <div class="context-group">
+                  <label for="systemPromptSelect">System Prompt (AI Behavior):</label>
+                  <select id="systemPromptSelect">
+                    <option value="">Select a system prompt...</option>
+                  </select>
+                  <div id="systemPromptInfo"></div>
+                  
+                  <label for="systemPromptInput" class="mt-15">Custom System Prompt:</label>
+                  <textarea
+                    id="systemPromptInput"
+                    placeholder="Write a custom system prompt or select one from above..."
+                  ></textarea>
+                  <div class="input-group mt-10">
+                    <button
+                      id="saveSystemPromptButton"
+                      type="button"
+                      class="btn btn-primary"
+                    >
+                      Save System Prompt
+                    </button>
+                    <button
+                      id="clearSystemPromptButton"
+                      type="button"
+                      class="btn btn-secondary"
+                    >
+                      Reset to Default
+                    </button>
                   </div>
                 </div>
-                <div id="uploadedFiles" class="uploaded-files"></div>
-              </div>
 
-              <div id="contextStatus" class="status mt-15"></div>
+                
+                <div class="context-group mt-20">
+                  <label for="contextInput">Additional Context:</label>
+                  <textarea
+                    id="contextInput"
+                    placeholder="Add any context that would help the AI provide better responses..."
+                  ></textarea>
+                  <div class="input-group mt-10">
+                    <button
+                      id="saveContextButton"
+                      type="button"
+                      class="btn btn-primary"
+                    >
+                      Save Context
+                    </button>
+                    <button
+                      id="clearContextButton"
+                      type="button"
+                      class="btn btn-secondary"
+                    >
+                      Clear Context
+                    </button>
+                  </div>
+                </div>
+
+                
+                <div class="context-group mt-20">
+                  <label for="fileInput">Upload Files (PDF, TXT, DOCX):</label>
+                  <div class="file-upload-area">
+                    <input
+                      type="file"
+                      id="fileInput"
+                      multiple
+                      accept=".pdf,.txt,.docx"
+                      class="hidden"
+                    />
+                    <div id="fileDropZone" class="file-drop-zone">
+                      <div class="drop-zone-content">
+                        <p>Click to select files or drag & drop here</p>
+                        <p class="drop-zone-hint">
+                          Supported: PDF, TXT, DOCX
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="uploadedFiles" class="uploaded-files"></div>
+                </div>
+
+                <div id="contextStatus" class="status mt-15"></div>
+              </div>
             </div>
-          </div>
-        </details>
-      </div>
-    </div>
-  </body>
+          </details>
+        </div>
+
+        <!-- RIGHT COLUMN: Conversation -->
+        <div class="conversation-column">
+          <!-- AI Conversation Section -->
+          <div class="section section-conversation">
+            <div class="section-title">AI Conversation</div>
+            <div id="openaiResponse" class="response-area">
+  <script src="./node_modules/marked/lib/marked.umd.js"></script>
   <script src="./renderer.js"></script>
 </html>

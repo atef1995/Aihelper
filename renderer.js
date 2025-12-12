@@ -2,11 +2,14 @@
 const streamButton = document.getElementById('streamButton');
 const stopStreamButton = document.getElementById('stopStreamButton');
 const recordToggleButton = document.getElementById('recordToggleButton');
+const autoAnswerToggle = document.getElementById('autoAnswerToggle');
+const autoAnswerControls = document.getElementById('autoAnswerControls');
 const openaiResponse = document.getElementById('openaiResponse');
 const streamingStatus = document.getElementById('streamingStatus');
 const apiKeyInput = document.getElementById('apiKeyInput');
 const setApiKeyButton = document.getElementById('setApiKeyButton');
 const apiKeyStatus = document.getElementById('apiKeyStatus');
+const expandConversationBtn = document.getElementById('expandConversationBtn');
 // Remove logElement since there's no 'info' element in HTML
 
 // Context management elements
@@ -44,6 +47,18 @@ let isRecording = false;
 let isResponseStreaming = false;
 let currentStreamElement = null;
 let systemPrompt = 'You are a helpful AI assistant. Provide clear, concise, and accurate responses. Help the user with their questions and tasks.';
+
+// Auto-Answer Mode variables
+let autoAnswerMode = false;
+let audioAnalyzer = null;
+let audioDataArray = null;
+let vadCheckInterval = null;
+let isSpeaking = false;
+let silenceStartTime = null;
+let speechStartTime = null;
+const SILENCE_THRESHOLD = 0.008; // Amplitude threshold for speech detection (2x baseline noise)
+const SILENCE_DURATION = 2000; // ms of silence before stopping (2 seconds)
+const MIN_SPEECH_DURATION = 800; // Minimum ms of speech to process
 
 // Model information mapping
 const modelDescriptions = {
@@ -134,16 +149,40 @@ window.electronAPI.onChatStreamChunk(({ chunk, isError }) => {
     responseDiv.innerHTML = '<div class="conversation-label"></div>';
     openaiResponse.appendChild(responseDiv);
     currentStreamElement = responseDiv;
+    // Store raw markdown for final rendering
+    currentStreamElement.rawMarkdown = '';
   }
 
-  // Append chunk to current response
-  currentStreamElement.textContent += chunk;
+  // Append chunk to raw markdown
+  currentStreamElement.rawMarkdown += chunk;
+  // Show preview in textContent
+  currentStreamElement.textContent = currentStreamElement.rawMarkdown;
   openaiResponse.scrollTop = openaiResponse.scrollHeight;
 });
 
 window.electronAPI.onChatStreamComplete(({ success, fullResponse }) => {
   if (success) {
     isResponseStreaming = false;
+    // Render markdown when complete
+    if (currentStreamElement && currentStreamElement.rawMarkdown) {
+      try {
+        const htmlContent = marked.parse(currentStreamElement.rawMarkdown);
+        const contentDiv = document.createElement('div');
+        contentDiv.innerHTML = htmlContent;
+        contentDiv.className = 'markdown-content';
+        // Replace content while keeping label
+        const label = currentStreamElement.querySelector('.conversation-label');
+        currentStreamElement.innerHTML = '';
+        if (label) currentStreamElement.appendChild(label);
+        currentStreamElement.appendChild(contentDiv);
+      } catch (error) {
+        console.error('Markdown parsing error:', error);
+        // Fallback to plain text if markdown parsing fails
+        const contentDiv = document.createElement('div');
+        contentDiv.textContent = currentStreamElement.rawMarkdown;
+        currentStreamElement.appendChild(contentDiv);
+      }
+    }
     streamingStatus.textContent = 'READY - Press SPACEBAR or click Record to continue!';
     streamingStatus.className = 'status success';
     currentStreamElement = null;
@@ -392,6 +431,213 @@ if (clearSystemPromptButton) {
   clearSystemPromptButton.addEventListener('click', resetSystemPrompt);
 }
 
+// Voice Activity Detection Functions
+function getAudioLevel(analyzerNode, dataArray) {
+  analyzerNode.getByteTimeDomainData(dataArray);
+  let sum = 0;
+  for (let i = 0; i < dataArray.length; i++) {
+    const normalized = (dataArray[i] - 128) / 128;
+    sum += normalized * normalized;
+  }
+  return Math.sqrt(sum / dataArray.length);
+}
+
+function startVoiceActivityDetection(stream) {
+  const audioContext = new AudioContext();
+  const source = audioContext.createMediaStreamSource(stream);
+  audioAnalyzer = audioContext.createAnalyser();
+  audioAnalyzer.fftSize = 2048;
+  source.connect(audioAnalyzer);
+  
+  const bufferLength = audioAnalyzer.fftSize;
+  audioDataArray = new Uint8Array(bufferLength);
+  
+  isSpeaking = false;
+  silenceStartTime = null;
+  speechStartTime = null;
+  
+  vadCheckInterval = setInterval(() => {
+    if (!autoAnswerMode || isResponseStreaming) return;
+    
+    const level = getAudioLevel(audioAnalyzer, audioDataArray);
+    
+    if (level > SILENCE_THRESHOLD) {
+      // Speech detected
+      if (!isSpeaking && !isRecording) {
+        // Start recording immediately when speech detected
+        isSpeaking = true;
+        speechStartTime = Date.now();
+        silenceStartTime = null;
+        startAutoRecording();
+      } else if (isRecording) {
+        // Reset silence timer while speech continues
+        silenceStartTime = null;
+      }
+    } else {
+      // Silence detected
+      if (isRecording) {
+        if (!silenceStartTime) {
+          silenceStartTime = Date.now();
+        } else if (Date.now() - silenceStartTime > SILENCE_DURATION) {
+          // Silence long enough, stop recording
+          const speechDuration = Date.now() - speechStartTime;
+          if (speechDuration >= MIN_SPEECH_DURATION) {
+            stopAutoRecording();
+          } else {
+            // Speech too short, cancel recording
+            if (currentRecorder && currentRecorder.state === 'recording') {
+              currentRecorder.stop();
+            }
+            isRecording = false;
+            isSpeaking = false;
+          }
+          silenceStartTime = null;
+        }
+      } else {
+        // Reset if we were detecting speech but it stopped before recording
+        if (isSpeaking) {
+          isSpeaking = false;
+          silenceStartTime = null;
+          speechStartTime = null;
+        }
+      }
+    }
+  }, 100);
+}
+
+function stopVoiceActivityDetection() {
+  if (vadCheckInterval) {
+    clearInterval(vadCheckInterval);
+    vadCheckInterval = null;
+  }
+  if (audioAnalyzer) {
+    audioAnalyzer = null;
+    audioDataArray = null;
+  }
+  isSpeaking = false;
+  silenceStartTime = null;
+  speechStartTime = null;
+}
+
+function stopAutoRecording() {
+  if (!isRecording || !currentRecorder) return;
+  
+  log('Stopping auto-recording...');
+  if (currentRecorder.state === 'recording') {
+    currentRecorder.stop();
+  }
+  isSpeaking = false;
+}
+
+async function startAutoRecording() {
+  if (isRecording || !isStreaming || isResponseStreaming) return;
+  
+  isRecording = true;
+  log('Auto-recording started...');
+  streamingStatus.textContent = 'Recording question...';
+  streamingStatus.className = 'status error';
+  
+  // Get the audio stream from the existing stream
+  const audioStream = window.currentAudioStream;
+  if (!audioStream) {
+    log('No audio stream available');
+    isRecording = false;
+    return;
+  }
+  
+  let options = {};
+  if (MediaRecorder.isTypeSupported('audio/wav')) {
+    options.mimeType = 'audio/wav';
+  } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+    options.mimeType = 'audio/webm';
+  }
+  
+  currentRecorder = new MediaRecorder(audioStream, options);
+  let recordedChunks = [];
+  
+  currentRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      recordedChunks.push(event.data);
+    }
+  };
+  
+  currentRecorder.onstop = async () => {
+    isRecording = false;
+    
+    // Clear timeout
+    if (window.autoRecordTimeout) {
+      clearTimeout(window.autoRecordTimeout);
+      window.autoRecordTimeout = null;
+    }
+    
+    if (recordedChunks.length > 0) {
+      streamingStatus.textContent = 'Processing with OpenAI...';
+      streamingStatus.className = 'status info';
+      
+      const audioBlob = new Blob(recordedChunks, { type: options.mimeType || 'audio/wav' });
+      log(`Recorded ${audioBlob.size} bytes`);
+      
+      try {
+        const arrayBuffer = await audioBlob.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
+        
+        const transcriptionResult = await window.electronAPI.transcribeAudio(uint8Array, options.mimeType);
+        
+        if (transcriptionResult.success && transcriptionResult.text.trim()) {
+          log(`Transcribed: "${transcriptionResult.text}"`);
+          
+          if (openaiResponse.innerHTML.includes('Start streaming to begin')) {
+            openaiResponse.innerHTML = '';
+          }
+          
+          const userMessageDiv = document.createElement('div');
+          userMessageDiv.className = 'conversation-item user';
+          userMessageDiv.innerHTML = `
+            <div class="conversation-label">System Audio (Auto)</div>
+            ${transcriptionResult.text}
+          `;
+          openaiResponse.appendChild(userMessageDiv);
+          
+          isResponseStreaming = true;
+          streamingStatus.textContent = 'Streaming response...';
+          streamingStatus.className = 'status info';
+          
+          window.electronAPI.chatCompletionStream(transcriptionResult.text, modelSelected, systemPrompt);
+        } else {
+          log('Transcription failed: ' + (transcriptionResult.error || 'No text'));
+          streamingStatus.textContent = 'Ready for next question...';
+          streamingStatus.className = 'status success';
+        }
+      } catch (error) {
+        log('Processing error: ' + error.message);
+        streamingStatus.textContent = 'Error - Ready for next question...';
+        streamingStatus.className = 'status warning';
+      }
+    }
+    
+    // Ready for next question if auto-answer is still on
+    if (autoAnswerMode) {
+      setTimeout(() => {
+        if (!isResponseStreaming && autoAnswerMode) {
+          streamingStatus.textContent = 'Ready - Listening for questions...';
+          streamingStatus.className = 'status success';
+        }
+      }, 1000);
+    }
+  };
+  
+  currentRecorder.start();
+  log('MediaRecorder started');
+  
+  // Safety timeout - auto-stop after 15 seconds max
+  window.autoRecordTimeout = setTimeout(() => {
+    if (isRecording && currentRecorder && currentRecorder.state === 'recording') {
+      log('Auto-record timeout reached, stopping');
+      stopAutoRecording();
+    }
+  }, 15000);
+}
+
 async function startRealTimeStream() {
   try {
     // Only use system audio (screen capture)
@@ -413,6 +659,9 @@ async function startRealTimeStream() {
     }
 
     const audioStream = new MediaStream(audioTracks);
+    
+    // Store audio stream globally for auto-answer mode
+    window.currentAudioStream = audioStream;
 
     isStreaming = true;
     streamButton.disabled = true;
@@ -426,6 +675,14 @@ async function startRealTimeStream() {
       recordToggleButton.disabled = false;
       recordToggleButton.setAttribute('data-recording', 'false');
     }
+    
+    // Show auto-answer controls
+    if (autoAnswerControls) {
+      autoAnswerControls.style.display = 'flex';
+    }
+    
+    // Start voice activity detection
+    startVoiceActivityDetection(audioStream);
 
     // Define recording functions
     const startRecording = async () => {
@@ -588,13 +845,28 @@ function stopRealTimeStream() {
     recordToggleButton.setAttribute('data-recording', 'false');
     recordToggleButton.querySelector('.record-text').textContent = 'Start Recording';
   }
+  
+  // Stop and hide auto-answer
+  if (autoAnswerMode) {
+    autoAnswerMode = false;
+    if (autoAnswerToggle) {
+      autoAnswerToggle.setAttribute('data-active', 'false');
+      autoAnswerToggle.querySelector('.auto-text').textContent = 'Enable Auto-Answer Mode';
+    }
+  }
+  stopVoiceActivityDetection();
+  
+  if (autoAnswerControls) {
+    autoAnswerControls.style.display = 'none';
+  }
 
   // Reset recording state
   isRecording = false;
   currentRecorder = null;
+  window.currentAudioStream = null;
 
   resetStreamButtons();
-  streamingStatus.textContent = '⏸️ Streaming stopped';
+  streamingStatus.textContent = 'Streaming stopped';
   streamingStatus.className = 'status';
   log('Push-to-record streaming stopped');
 }
@@ -863,14 +1135,45 @@ async function autoCheckForUpdates() {
     const result = await window.electronAPI.checkForUpdates();
 
     if (result.success && result.isUpdateAvailable) {
-      // Only show notification if update is available
-      const message = `🎉 New version ${result.latestVersion} is available!\nCurrent version: ${result.currentVersion}\n\nWould you like to visit the release page?`;
-
-      if (confirm(message)) {
+      // Show a simple notification without confirm dialog
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        z-index: 5000;
+        max-width: 350px;
+        font-size: 14px;
+        cursor: pointer;
+      `;
+      notification.innerHTML = `
+        <div style="margin-bottom: 10px; font-weight: 600;">
+          New version ${result.latestVersion} available!
+        </div>
+        <div style="font-size: 12px; margin-bottom: 10px; opacity: 0.9;">
+          Click to visit release page or dismiss
+        </div>
+      `;
+      
+      notification.addEventListener('click', async () => {
         await window.electronAPI.openExternalURL(result.releaseUrl);
-      }
+        notification.remove();
+      });
+      
+      document.body.appendChild(notification);
+      
+      // Auto-dismiss after 10 seconds
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.remove();
+        }
+      }, 10000);
     }
-    // Silent if no update available or error - don't bother the user
   } catch (error) {
     // Silently fail - don't show error on startup
     console.log('Silent auto-update check: ' + error.message);
@@ -1062,6 +1365,71 @@ window.startRealTimeStream = async function() {
     recordControls.style.display = 'flex';
   }
 };
+
+// Auto-Answer Toggle Button
+if (autoAnswerToggle) {
+  autoAnswerToggle.addEventListener('click', () => {
+    autoAnswerMode = !autoAnswerMode;
+    
+    if (autoAnswerMode) {
+      autoAnswerToggle.setAttribute('data-active', 'true');
+      autoAnswerToggle.querySelector('.auto-text').textContent = 'Disable Auto-Answer Mode';
+      streamingStatus.textContent = 'Auto-Answer Mode Active - Listening for questions...';
+      streamingStatus.className = 'status success';
+      log('Auto-Answer Mode enabled');
+      
+      // Hide manual recording button when auto mode is on
+      if (recordControls) {
+        recordControls.style.display = 'none';
+      }
+    } else {
+      autoAnswerToggle.setAttribute('data-active', 'false');
+      autoAnswerToggle.querySelector('.auto-text').textContent = 'Enable Auto-Answer Mode';
+      streamingStatus.textContent = 'READY - Press SPACEBAR to record and transcribe!';
+      streamingStatus.className = 'status success';
+      log('Auto-Answer Mode disabled');
+      
+      // Show manual recording button when auto mode is off
+      if (recordControls) {
+        recordControls.style.display = 'flex';
+      }
+    }
+  });
+}
+
+// Conversation Expand/Collapse
+if (expandConversationBtn) {
+  expandConversationBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const container = document.querySelector('.container');
+    const isExpanded = container.classList.contains('conversation-expanded');
+    
+    if (isExpanded) {
+      // Collapse
+      container.classList.remove('conversation-expanded');
+      document.body.style.overflow = 'auto';
+      const closeBtn = document.querySelector('.close-expanded-btn');
+      if (closeBtn) closeBtn.remove();
+    } else {
+      // Expand
+      container.classList.add('conversation-expanded');
+      document.body.style.overflow = 'hidden';
+      
+      // Add close button
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'close-expanded-btn';
+      closeBtn.textContent = 'Exit Full View';
+      closeBtn.addEventListener('click', () => {
+        container.classList.remove('conversation-expanded');
+        document.body.style.overflow = 'auto';
+        closeBtn.remove();
+      });
+      document.body.appendChild(closeBtn);
+    }
+  });
+}
 
 // Initialize wizard on load
 checkFirstRun();
