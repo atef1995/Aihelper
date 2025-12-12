@@ -1,8 +1,7 @@
 // renderer.js - Clean version
 const streamButton = document.getElementById('streamButton');
 const stopStreamButton = document.getElementById('stopStreamButton');
-const recordButton = document.getElementById('recordButton');
-const stopRecordButton = document.getElementById('stopRecordButton');
+const recordToggleButton = document.getElementById('recordToggleButton');
 const openaiResponse = document.getElementById('openaiResponse');
 const streamingStatus = document.getElementById('streamingStatus');
 const apiKeyInput = document.getElementById('apiKeyInput');
@@ -145,7 +144,7 @@ window.electronAPI.onChatStreamChunk(({ chunk, isError }) => {
 window.electronAPI.onChatStreamComplete(({ success, fullResponse }) => {
   if (success) {
     isResponseStreaming = false;
-    streamingStatus.textContent = '🎤 READY - Press SPACEBAR or click Record to continue!';
+    streamingStatus.textContent = 'READY - Press SPACEBAR or click Record to continue!';
     streamingStatus.className = 'status success';
     currentStreamElement = null;
   }
@@ -156,7 +155,7 @@ window.electronAPI.onChatStreamError(({ error, category }) => {
   const errorMsg = error || 'Chat error';
   log('Stream error: ' + errorMsg);
 
-  streamingStatus.textContent = `❌ ${errorMsg}`;
+  streamingStatus.textContent = `Error: ${errorMsg}`;
   streamingStatus.className = 'status error';
 
   // Add error message to chat history
@@ -168,9 +167,9 @@ window.electronAPI.onChatStreamError(({ error, category }) => {
     const errorDiv = document.createElement('div');
     errorDiv.className = 'conversation-item error';
     errorDiv.innerHTML = `
-      <div class="conversation-label">⚠️ Error</div>
+      <div class="conversation-label">Error</div>
       <strong>${category || 'API Error'}</strong><br>${errorMsg}
-      <br><small>💡 ${getCategoryHint(category)}</small>
+      <br><small>${getCategoryHint(category)}</small>
     `;
     openaiResponse.appendChild(errorDiv);
     openaiResponse.scrollTop = openaiResponse.scrollHeight;
@@ -192,20 +191,20 @@ stopStreamButton.addEventListener('click', () => {
 setApiKeyButton.addEventListener('click', async () => {
   const apiKey = apiKeyInput.value.trim();
   if (!apiKey) {
-    apiKeyStatus.textContent = '⚠️ Please enter an API key';
+    apiKeyStatus.textContent = 'Please enter an API key';
     apiKeyStatus.className = 'status warning';
     return;
   }
 
   // Show processing status
-  apiKeyStatus.textContent = '🔄 Validating API key...';
+  apiKeyStatus.textContent = 'Validating API key...';
   apiKeyStatus.className = 'status info';
   setApiKeyButton.disabled = true;
 
   try {
     const result = await window.electronAPI.setApiKey(apiKey);
     if (result.success) {
-      apiKeyStatus.textContent = result.validated ? '✅ API key validated and set successfully!' : '✅ API key set successfully!';
+      apiKeyStatus.textContent = result.validated ? 'API key validated and set successfully!' : 'API key set successfully!';
       apiKeyStatus.className = 'status success';
       apiKeyInput.value = '';
       updateStreamButtonState();
@@ -224,7 +223,7 @@ setApiKeyButton.addEventListener('click', async () => {
       log(`API key validation failed: ${result.errorType || 'unknown error'}`);
     }
   } catch (error) {
-    apiKeyStatus.textContent = '❌ Error setting API key: ' + error.message;
+    apiKeyStatus.textContent = 'Error setting API key: ' + error.message;
     apiKeyStatus.className = 'status error';
     log('API key error: ' + error.message);
   } finally {
@@ -237,18 +236,18 @@ async function checkApiKeyStatus() {
   try {
     const status = await window.electronAPI.getApiKeyStatus();
     if (status.hasApiKey) {
-      apiKeyStatus.textContent = '✅ API key is configured';
+      apiKeyStatus.textContent = 'API key is configured';
       apiKeyStatus.className = 'status success';
       apiKeyConfigured = true;
     } else {
-      apiKeyStatus.textContent = '⚠️ No API key configured';
+      apiKeyStatus.textContent = 'No API key configured';
       apiKeyStatus.className = 'status warning';
       apiKeyConfigured = false;
     }
     updateStreamButtonState();
     checkReadyStatus();
   } catch (error) {
-    apiKeyStatus.textContent = '❌ Error checking API key status';
+    apiKeyStatus.textContent = 'Error checking API key status';
     apiKeyStatus.className = 'status error';
   }
 }
@@ -304,7 +303,7 @@ async function handleModelChange(event) {
 function checkReadyStatus() {
   if (apiKeyConfigured && modelSelected) {
     if (readyStatus) {
-      readyStatus.innerHTML = '✅ Everything is ready! Press "Start AI Stream" to begin.';
+      readyStatus.innerHTML = 'Everything is ready! Press "Start AI Stream" to begin.';
       readyStatus.className = 'status success';
       readyStatus.style.display = 'block';
     }
@@ -340,8 +339,8 @@ function handleSystemPromptSelect(event) {
   if (selectedPrompt) {
     systemPrompt = selectedPrompt.content;
     systemPromptInput.value = selectedPrompt.content;
-    systemPromptInfo.innerHTML = `📋 ${selectedPrompt.description}`;
-    contextStatus.textContent = `✅ System prompt applied: ${selectedPrompt.title}`;
+    systemPromptInfo.innerHTML = `${selectedPrompt.description}`;
+    contextStatus.textContent = `System prompt applied: ${selectedPrompt.title}`;
     contextStatus.className = 'status success';
     log(`Applied system prompt: ${selectedPrompt.title}`);
   }
@@ -351,15 +350,15 @@ function applyCustomSystemPrompt() {
   const customPrompt = systemPromptInput.value.trim();
 
   if (!customPrompt) {
-    contextStatus.textContent = '⚠️ Please enter a system prompt';
+    contextStatus.textContent = 'Please enter a system prompt';
     contextStatus.className = 'status warning';
     return;
   }
 
   systemPrompt = customPrompt;
   systemPromptSelect.value = ''; // Clear dropdown since using custom
-  systemPromptInfo.innerHTML = '📋 Custom system prompt';
-  contextStatus.textContent = '✅ Custom system prompt applied!';
+  systemPromptInfo.innerHTML = 'Custom system prompt';
+  contextStatus.textContent = 'Custom system prompt applied!';
   contextStatus.className = 'status success';
   log('Applied custom system prompt: ' + customPrompt.substring(0, 50) + '...');
 }
@@ -369,8 +368,8 @@ function resetSystemPrompt() {
   systemPrompt = defaultPrompt.content;
   systemPromptInput.value = defaultPrompt.content;
   systemPromptSelect.value = '';
-  systemPromptInfo.innerHTML = `📋 ${defaultPrompt.description}`;
-  contextStatus.textContent = '✅ System prompt reset to default!';
+  systemPromptInfo.innerHTML = `${defaultPrompt.description}`;
+  contextStatus.textContent = 'System prompt reset to default!';
   contextStatus.className = 'status success';
   log('System prompt reset to default');
 }
@@ -419,14 +418,14 @@ async function startRealTimeStream() {
     streamButton.disabled = true;
     stopStreamButton.disabled = false;
 
-    streamingStatus.textContent = '🎤 READY - Press SPACEBAR to record and transcribe!';
+    streamingStatus.textContent = 'READY - Press SPACEBAR to record and transcribe!';
     streamingStatus.className = 'status success';
 
-    // Show record buttons
-    recordButton.disabled = false;
-    recordButton.style.display = 'inline-flex';
-    stopRecordButton.disabled = true;
-    stopRecordButton.style.display = 'inline-flex';
+    // Show record toggle button
+    if (recordToggleButton) {
+      recordToggleButton.disabled = false;
+      recordToggleButton.setAttribute('data-recording', 'false');
+    }
 
     // Define recording functions
     const startRecording = async () => {
@@ -434,10 +433,13 @@ async function startRealTimeStream() {
 
       isRecording = true;
       log('Starting recording...');
-      streamingStatus.textContent = '🔴 RECORDING - Release SPACEBAR or click Stop to transcribe...';
+      streamingStatus.textContent = 'RECORDING - Click Stop or press SPACEBAR again to finish...';
       streamingStatus.className = 'status error';
-      recordButton.disabled = true;
-      stopRecordButton.disabled = false;
+      
+      if (recordToggleButton) {
+        recordToggleButton.setAttribute('data-recording', 'true');
+        recordToggleButton.querySelector('.record-text').textContent = 'Stop Recording';
+      }
 
       // Use simple WAV format - most reliable
       let options = {};
@@ -458,8 +460,11 @@ async function startRealTimeStream() {
 
       currentRecorder.onstop = async () => {
         isRecording = false;
-        recordButton.disabled = false;
-        stopRecordButton.disabled = true;
+        
+        if (recordToggleButton) {
+          recordToggleButton.setAttribute('data-recording', 'false');
+          recordToggleButton.querySelector('.record-text').textContent = 'Start Recording';
+        }
 
         if (recordedChunks.length > 0) {
           streamingStatus.textContent = '🔄 Processing with OpenAI...';
@@ -523,36 +528,39 @@ async function startRealTimeStream() {
       currentRecorder.stop();
     };
 
-    // Keyboard event listeners
+    // Keyboard event listener - toggle on SPACEBAR press
     const keydownHandler = (event) => {
       if (event.code === 'Space' && !event.repeat && isStreaming) {
         event.preventDefault();
+        if (isRecording) {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      }
+    };
+
+    // Toggle button click listener
+    const toggleButtonClickHandler = () => {
+      if (isRecording) {
+        stopRecording();
+      } else {
         startRecording();
       }
     };
 
-    const keyupHandler = (event) => {
-      if (event.code === 'Space' && isStreaming) {
-        event.preventDefault();
-        stopRecording();
-      }
-    };
-
-    // Button event listeners
-    const recordButtonHandler = () => startRecording();
-    const stopRecordButtonHandler = () => stopRecording();
-
     document.addEventListener('keydown', keydownHandler);
-    document.addEventListener('keyup', keyupHandler);
-    recordButton.addEventListener('click', recordButtonHandler);
-    stopRecordButton.addEventListener('click', stopRecordButtonHandler);
+    
+    if (recordToggleButton) {
+      recordToggleButton.addEventListener('click', toggleButtonClickHandler);
+    }
 
     // Store cleanup function
     window.cleanupKeyboardListeners = () => {
       document.removeEventListener('keydown', keydownHandler);
-      document.removeEventListener('keyup', keyupHandler);
-      recordButton.removeEventListener('click', recordButtonHandler);
-      stopRecordButton.removeEventListener('click', stopRecordButtonHandler);
+      if (recordToggleButton) {
+        recordToggleButton.removeEventListener('click', toggleButtonClickHandler);
+      }
     };
 
     log('Simple push-to-record streaming ready!');
@@ -574,11 +582,12 @@ function stopRealTimeStream() {
     window.cleanupKeyboardListeners = null;
   }
 
-  // Hide record buttons
-  recordButton.style.display = 'none';
-  stopRecordButton.style.display = 'none';
-  recordButton.disabled = true;
-  stopRecordButton.disabled = true;
+  // Hide and reset toggle button
+  if (recordToggleButton) {
+    recordToggleButton.disabled = true;
+    recordToggleButton.setAttribute('data-recording', 'false');
+    recordToggleButton.querySelector('.record-text').textContent = 'Start Recording';
+  }
 
   // Reset recording state
   isRecording = false;
@@ -927,4 +936,133 @@ if (closeGuideBtn) {
 if (gotItBtn) {
   gotItBtn.addEventListener('click', closeGuide);
 }
+
+// Setup Wizard Logic
+const setupWizard = document.getElementById('setupWizard');
+const wizardApiKey = document.getElementById('wizardApiKey');
+const wizardApiStatus = document.getElementById('wizardApiStatus');
+const wizardNextStep1 = document.getElementById('wizardNextStep1');
+const wizardNextStep2 = document.getElementById('wizardNextStep2');
+const wizardBackStep2 = document.getElementById('wizardBackStep2');
+const wizardComplete = document.getElementById('wizardComplete');
+const recordControls = document.getElementById('recordControls');
+
+let wizardCurrentStep = 1;
+
+// Check if wizard should be shown on first load
+async function checkFirstRun() {
+  try {
+    const status = await window.electronAPI.getApiKeyStatus();
+    if (!status.hasApiKey) {
+      setupWizard.style.display = 'flex';
+    }
+  } catch (error) {
+    setupWizard.style.display = 'flex';
+  }
+}
+
+function updateWizardProgress(step) {
+  document.querySelectorAll('.progress-step').forEach((el, index) => {
+    if (index + 1 < step) {
+      el.classList.add('completed');
+      el.classList.remove('active');
+    } else if (index + 1 === step) {
+      el.classList.add('active');
+      el.classList.remove('completed');
+    } else {
+      el.classList.remove('active', 'completed');
+    }
+  });
+}
+
+function showWizardStep(step) {
+  document.querySelectorAll('.wizard-step').forEach(el => {
+    el.style.display = 'none';
+  });
+  const stepEl = document.querySelector(`.wizard-step[data-step="${step}"]`);
+  if (stepEl) {
+    stepEl.style.display = 'block';
+  }
+  updateWizardProgress(step);
+  wizardCurrentStep = step;
+}
+
+// Step 1: API Key
+if (wizardNextStep1) {
+  wizardNextStep1.addEventListener('click', async () => {
+    const apiKey = wizardApiKey.value.trim();
+    if (!apiKey) {
+      wizardApiStatus.textContent = 'Please enter an API key';
+      wizardApiStatus.className = 'wizard-status error';
+      return;
+    }
+
+    wizardApiStatus.textContent = 'Validating API key...';
+    wizardApiStatus.className = 'wizard-status info';
+    wizardNextStep1.disabled = true;
+
+    try {
+      const result = await window.electronAPI.setApiKey(apiKey);
+      if (result.success) {
+        wizardApiStatus.textContent = 'API key validated successfully!';
+        wizardApiStatus.className = 'wizard-status success';
+        setTimeout(() => showWizardStep(2), 500);
+      } else {
+        wizardApiStatus.textContent = result.error || 'Failed to validate API key';
+        wizardApiStatus.className = 'wizard-status error';
+      }
+    } catch (error) {
+      wizardApiStatus.textContent = 'Error: ' + error.message;
+      wizardApiStatus.className = 'wizard-status error';
+    } finally {
+      wizardNextStep1.disabled = false;
+    }
+  });
+}
+
+// Step 2: Model Selection
+if (wizardBackStep2) {
+  wizardBackStep2.addEventListener('click', () => {
+    showWizardStep(1);
+  });
+}
+
+if (wizardNextStep2) {
+  wizardNextStep2.addEventListener('click', async () => {
+    const selectedModel = document.querySelector('input[name="wizardModel"]:checked').value;
+    try {
+      await window.electronAPI.setSelectedModel(selectedModel);
+      modelSelected = selectedModel;
+      modelSelect.value = selectedModel;
+      showWizardStep(3);
+    } catch (error) {
+      alert('Error setting model: ' + error.message);
+    }
+  });
+}
+
+// Step 3: Complete
+if (wizardComplete) {
+  wizardComplete.addEventListener('click', () => {
+    setupWizard.style.display = 'none';
+    checkApiKeyStatus();
+    checkReadyStatus();
+  });
+}
+
+// Override startRealTimeStream to show record controls
+const originalStartRealTimeStream = window.startRealTimeStream || startRealTimeStream;
+window.startRealTimeStream = async function() {
+  if (originalStartRealTimeStream) {
+    await originalStartRealTimeStream.call(this);
+  } else {
+    await startRealTimeStream();
+  }
+  if (recordControls) {
+    recordControls.style.display = 'flex';
+  }
+};
+
+// Initialize wizard on load
+checkFirstRun();
 
