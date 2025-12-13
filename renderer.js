@@ -155,7 +155,7 @@ window.electronAPI.onChatStreamChunk(({ chunk, isError }) => {
 
   // Append chunk to raw markdown
   currentStreamElement.rawMarkdown += chunk;
-  // Show preview in textContent
+  // Show preview in textContent during streaming
   currentStreamElement.textContent = currentStreamElement.rawMarkdown;
   openaiResponse.scrollTop = openaiResponse.scrollHeight;
 });
@@ -167,17 +167,27 @@ window.electronAPI.onChatStreamComplete(({ success, fullResponse }) => {
     if (currentStreamElement && currentStreamElement.rawMarkdown) {
       try {
         const htmlContent = marked.parse(currentStreamElement.rawMarkdown);
+        // Clear all content completely
+        currentStreamElement.innerHTML = '';
+        
+        // Re-add label
+        const label = document.createElement('div');
+        label.className = 'conversation-label';
+        currentStreamElement.appendChild(label);
+        
+        // Add markdown content
         const contentDiv = document.createElement('div');
         contentDiv.innerHTML = htmlContent;
         contentDiv.className = 'markdown-content';
-        // Replace content while keeping label
-        const label = currentStreamElement.querySelector('.conversation-label');
-        currentStreamElement.innerHTML = '';
-        if (label) currentStreamElement.appendChild(label);
         currentStreamElement.appendChild(contentDiv);
       } catch (error) {
         console.error('Markdown parsing error:', error);
         // Fallback to plain text if markdown parsing fails
+        currentStreamElement.innerHTML = '';
+        const label = document.createElement('div');
+        label.className = 'conversation-label';
+        currentStreamElement.appendChild(label);
+        
         const contentDiv = document.createElement('div');
         contentDiv.textContent = currentStreamElement.rawMarkdown;
         currentStreamElement.appendChild(contentDiv);
